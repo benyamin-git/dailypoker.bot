@@ -419,3 +419,40 @@ export function lastFinishedMatchPlayers(sql: SqlStorage): number[] {
       .toArray() as { user_id: number }[]
   ).map((row) => row.user_id);
 }
+
+export interface HistoryRow {
+  hand_no: number;
+  board: string | null;
+  winner_ids: string | null;
+  delta: number;
+  hole: string | null;
+  pot: number | null;
+}
+
+export function playerHistory(sql: SqlStorage, userId: number, limit: number): HistoryRow[] {
+  return sql
+    .exec(
+      `SELECT m.hand_no AS hand_no, m.board AS board, m.winner_ids AS winner_ids,
+              m.pot AS pot, mp.delta AS delta, mp.hole AS hole
+       FROM match_players mp
+       JOIN matches m ON m.id = mp.match_id
+       WHERE mp.user_id = ? AND m.status = 'done' AND m.hand_no IS NOT NULL
+       ORDER BY m.id DESC
+       LIMIT ?`,
+      userId,
+      limit,
+    )
+    .toArray() as unknown as HistoryRow[];
+}
+
+export function setDaily(sql: SqlStorage, userId: number, at: number): void {
+  sql.exec("UPDATE players SET last_daily_at = ? WHERE user_id = ?", at, userId);
+}
+
+export function wipeGroup(sql: SqlStorage): void {
+  sql.exec("DELETE FROM match_players");
+  sql.exec("DELETE FROM matches");
+  sql.exec("DELETE FROM players");
+  sql.exec("DELETE FROM processed_updates");
+  sql.exec("DELETE FROM meta WHERE key != 'schema_version' AND key != 'group_title'");
+}

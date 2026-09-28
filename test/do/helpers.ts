@@ -1,6 +1,6 @@
 import {
-  abortAllDurableObjects,
   env,
+  evictAllDurableObjects,
   reset,
   runDurableObjectAlarm,
   runInDurableObject,
@@ -202,7 +202,7 @@ export async function setRunoutDeadlineInPast(): Promise<void> {
 
 export async function cleanStorage(): Promise<void> {
   await reset();
-  await abortAllDurableObjects();
+  await evictAllDurableObjects();
 }
 
 export async function runAlarm(): Promise<boolean> {
@@ -227,3 +227,58 @@ export function lastEditText(calls: TelegramCall[]): string {
 }
 
 export { reset };
+
+export async function getPlayerRow(userId: number): Promise<Record<string, unknown> | null> {
+  const stub = groupStub();
+  return runInDurableObject(stub, async (_instance: TableDO, state) => {
+    const rows = state.storage.sql
+      .exec("SELECT * FROM players WHERE user_id = ?", userId)
+      .toArray() as unknown as Record<string, unknown>[];
+    return rows[0] ?? null;
+  });
+}
+
+export async function setLastDailyAt(userId: number, at: number): Promise<void> {
+  const stub = groupStub();
+  await runInDurableObject(stub, async (_instance: TableDO, state) => {
+    store.setDaily(state.storage.sql, userId, at);
+  });
+}
+
+export async function setBalance(userId: number, balance: number): Promise<void> {
+  const stub = groupStub();
+  await runInDurableObject(stub, async (_instance: TableDO, state) => {
+    state.storage.sql.exec("UPDATE players SET balance = ? WHERE user_id = ?", balance, userId);
+  });
+}
+
+export async function countRows(table: "players" | "matches" | "match_players"): Promise<number> {
+  const stub = groupStub();
+  return runInDurableObject(stub, async (_instance: TableDO, state) => {
+    const row = state.storage.sql.exec(`SELECT COUNT(*) AS count FROM ${table}`).one() as {
+      count: number;
+    };
+    return row.count;
+  });
+}
+
+export async function insertFakeMatches(count: number): Promise<void> {
+  const stub = groupStub();
+  await runInDurableObject(stub, async (_instance: TableDO, state) => {
+    const sql = state.storage.sql;
+    for (let i = 0; i < count; i++) {
+      sql.exec(
+        `INSERT INTO matches (hand_no, status, starter_id, created_at, started_at, ended_at)
+         VALUES (?, 'done', 1, 1, 1, 1)`,
+        i + 1,
+      );
+    }
+  });
+}
+
+export async function runPruneMatches(): Promise<void> {
+  const stub = groupStub();
+  await runInDurableObject(stub, async (_instance: TableDO, state) => {
+    store.pruneMatches(state.storage.sql);
+  });
+}

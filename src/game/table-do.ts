@@ -2,6 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 
 import {
   ANTE,
+  DAILY_AMOUNT,
+  DAILY_COOLDOWN_MS,
   LOBBY_TTL_MS,
   MAX_PLAYERS,
   MIN_JOIN_BALANCE,
@@ -267,6 +269,9 @@ export class TableDO extends DurableObject<Bindings> {
       return;
     }
     store.ensurePlayer(this.sql, intent.user, Date.now());
+    if (intent.chatType !== "private" && intent.chatTitle !== null) {
+      store.setMeta(this.sql, "group_title", intent.chatTitle);
+    }
     if (intent.kind === "command") {
       await this.handleCommand(intent);
       return;
@@ -357,6 +362,24 @@ export class TableDO extends DurableObject<Bindings> {
         case "cards":
           await this.dmCards(userId);
           return;
+        case "daily":
+          await this.handleDaily(intent);
+          return;
+        case "balance":
+          await this.sendBalance(intent.chatId, userId);
+          return;
+        case "stats":
+          await this.sendStats(intent.chatId, userId);
+          return;
+        case "history":
+          await this.sendHistory(intent.chatId, userId, args);
+          return;
+        case "version":
+          await this.sendVersion(intent);
+          return;
+        case "resetgroup":
+          await this.resetGroup(intent);
+          return;
         default:
           await this.api.sendMessage(intent.chatId, messages.helpText(true));
           return;
@@ -410,6 +433,18 @@ export class TableDO extends DurableObject<Bindings> {
         return;
       case "cards":
         await this.dmCards(userId);
+        return;
+      case "balance":
+        await this.sendBalance(intent.chatId, userId);
+        return;
+      case "top":
+        await this.sendLeaderboard(intent.chatId);
+        return;
+      case "stats":
+        await this.sendStats(userId, userId);
+        return;
+      case "history":
+        await this.sendHistory(userId, userId, args);
         return;
       case "rules":
         await this.api.sendMessage(intent.chatId, messages.rulesText());
@@ -1195,6 +1230,151 @@ export class TableDO extends DurableObject<Bindings> {
       });
     }
     await this.api.flushEdits();
+  }
+
+  private async handleDaily(intent: CommandIntent): Promise<void> {
+    const now = Date.now();
+    const player = store.getPlayer(this.sql, intent.userId);
+    if (!player) {
+      return;
+    }
+    if (player.last_daily_at !== null && now - player.last_daily_at < DAILY_COOLDOWN_MS) {
+      await this.api.sendMessage(
+        intent.chatId,
+        messages.dailyTooEarlyText(DAILY_COOLDOWN_MS - (now - player.last_daily_at)),
+      );
+      return;
+    }
+    store.adjustBalance(this.sql, player.user_id, DAILY_AMOUNT);
+    store.setDaily(this.sql, player.user_id, now);
+    const updated = store.getPlayer(this.sql, player.user_id);
+    await this.api.sendMessage(intent.chatId, messages.dailyClaimedText(updated?.balance ?? 0));
+    try {
+      await this.api.sendMessage(this.groupId, messages.dailyTeaserText(player.first_name));
+    } catch (error) {
+      console.error(
+        JSON.stringify({ event: "daily_teaser_failed", error: safeErrorMessage(error) }),
+      );
+    }
+  }
+
+  private async sendBalance(chatId: number, userId: number): Promise<void> {
+    const player = store.getPlayer(this.sql, userId);
+    if (!player) {
+      return;
+    }
+    await this.api.sendMessage(
+      chatId,
+      messages.balanceText(
+        {
+          balance: player.balance,
+          lastDailyAt: player.last_daily_at,
+          handsPlayed: player.hands_played,
+          handsWon: player.hands_won,
+          chipsWon: player.chips_won,
+          chipsLost: player.chips_lost,
+          now: Date.now(),
+        },
+        DAILY_COOLDOWN_MS,
+      ),
+    );
+  }
+
+  private async sendStats(chatId: number, userId: number): Promise<void> {
+    const player = store.getPlayer(this.sql, userId);
+    if (!player) {
+      return;
+    }
+    await this.api.sendMessage(
+      chatId,
+      messages.statsText(
+        {
+          balance: player.balance,
+          lastDailyAt: player.last_daily_at,
+          handsPlayed: player.hands_played,
+          handsWon: player.hands_won,
+          chipsWon: player.chips_won,
+          chipsLost: player.chips_lost,
+          biggestPot: player.biggest_pot,
+          bestHand: player.best_hand,
+          now: Date.now(),
+        },
+        store.getMeta(this.sql, "group_title"),
+      ),
+    );
+  }
+
+  private async sendHistory(chatId: number, userId: number, args: string): Promise<void> {
+    const parsed = Number.parseInt(args.trim(), 10);
+    const limit = Number.isSafeInteger(parsed) ? Math.min(Math.max(parsed, 1), 20) : 5;
+    const rows = store.playerHistory(this.sql, userId, limit).map((row) => ({
+      handNo: row.hand_no,
+      won: (JSON.parse(row.winner_ids ?? "[]") as number[]).includes(userId),
+      delta: row.delta,
+      hole: row.hole === null ? null : (JSON.parse(row.hole) as Card[]),
+      board: row.board === null ? [] : (JSON.parse(row.board) as Card[]),
+    }));
+    await this.api.sendMessage(chatId, messages.historyText(rows));
+  }
+
+  private async sendLeaderboard(chatId: number): Promise<void> {
+    const rows = store
+      .leaderboard(this.sql, 5)
+      .filter((player) => player.balance > 0)
+      .map((player) => ({ firstName: player.first_name, balance: player.balance }));
+    await this.api.sendMessage(
+      chatId,
+      messages.leaderboardText(rows, store.getMeta(this.sql, "group_title")),
+    );
+  }
+
+  private async sendVersion(intent: CommandIntent): Promise<void> {
+    if (intent.userId !== this.config.ownerUserId) {
+      await this.privateAlert(intent.userId, messages.ownerOnlyText());
+      return;
+    }
+    const info = await this.api.call<{ url?: string; pending_update_count?: number }>(
+      "getWebhookInfo",
+      {},
+    );
+    await this.api.sendMessage(
+      intent.chatId,
+      messages.versionText("0.1.0", info.url ?? null, info.pending_update_count ?? 0),
+    );
+  }
+
+  private async resetGroup(intent: CommandIntent): Promise<void> {
+    if (intent.userId !== this.config.ownerUserId) {
+      await this.privateAlert(intent.userId, messages.ownerOnlyText());
+      return;
+    }
+    const parts = intent.args.trim().split(/\s+/);
+    if (parts[0] === "confirm") {
+      const target = Number(parts[1]);
+      const pending = store.getMeta(this.sql, "reset_pending");
+      if (pending === null || Number(pending) !== target) {
+        await this.api.sendMessage(
+          intent.chatId,
+          "Nothing pending. Run /resetgroup <chat_id> first.",
+        );
+        return;
+      }
+      store.wipeGroup(this.sql);
+      this.state = emptyState();
+      this.persist();
+      await this.api.sendMessage(intent.chatId, messages.resetGroupDoneText(target));
+      return;
+    }
+    const target = Number(parts[0]);
+    if (!Number.isSafeInteger(target) || target !== this.groupId) {
+      await this.api.sendMessage(
+        intent.chatId,
+        `Usage: /resetgroup ${this.groupId} (then confirm)`,
+      );
+      return;
+    }
+    store.setMeta(this.sql, "reset_pending", String(target));
+    await this.api.sendMessage(intent.chatId, messages.resetGroupConfirmText(target));
   }
 
   private async dmCards(userId: number): Promise<void> {

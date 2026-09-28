@@ -1,5 +1,6 @@
-import { ANTE, CAP, CURRENCY_NAME, MAX_PLAYERS, MIN_JOIN_BALANCE } from "../config";
+import { ANTE, CAP, CURRENCY_NAME, DAILY_AMOUNT, MAX_PLAYERS, MIN_JOIN_BALANCE } from "../config";
 import type { Card, MatchState, PlayerState } from "../engine/types";
+import { formatDuration } from "../util/time";
 
 const SUIT_SYMBOL: Record<string, string> = { s: "♠", h: "♥", d: "♦", c: "♣" };
 
@@ -285,4 +286,133 @@ export function raiseCapAlert(maxTo: number): string {
 
 export function noRaiseAlert(): string {
   return "You can't raise right now.";
+}
+
+export const DAILY_AMOUNT_TEXT = DAILY_AMOUNT;
+
+export interface BalanceView {
+  balance: number;
+  lastDailyAt: number | null;
+  handsPlayed: number;
+  handsWon: number;
+  chipsWon: number;
+  chipsLost: number;
+  now: number;
+}
+
+export interface StatsView extends BalanceView {
+  biggestPot: number;
+  bestHand: string | null;
+}
+
+export function dailyClaimedText(balance: number): string {
+  return `✅ +${DAILY_AMOUNT_TEXT} chips claimed. Balance: ${formatAmount(balance)}. Next claim in 24h.`;
+}
+
+export function dailyTooEarlyText(remainingMs: number): string {
+  return `⏳ Already claimed. Next claim in ${formatDuration(remainingMs)}.`;
+}
+
+export function dailyTeaserText(name: string): string {
+  return `🎁 ${escapeHtml(name)} claimed their daily chips.`;
+}
+
+export function dailyStatus(lastDailyAt: number | null, now: number, cooldownMs: number): string {
+  if (lastDailyAt === null || now - lastDailyAt >= cooldownMs) {
+    return "ready now";
+  }
+  return `next in ${formatDuration(cooldownMs - (now - lastDailyAt))}`;
+}
+
+export function balanceText(view: BalanceView, cooldownMs: number): string {
+  const net = view.chipsWon - view.chipsLost;
+  return [
+    `💰 Balance: ${formatAmount(view.balance)} ${CURRENCY_NAME}`,
+    `🌅 Daily: ${dailyStatus(view.lastDailyAt, view.now, cooldownMs)}`,
+    `📈 Record: ${view.handsPlayed} hands · ${view.handsWon} wins · ${
+      net >= 0 ? "+" : ""
+    }${formatAmount(net)} ${CURRENCY_NAME}`,
+  ].join("\n");
+}
+
+export function statsText(player: StatsView, groupTitle: string | null): string {
+  const net = player.chipsWon - player.chipsLost;
+  const winRate =
+    player.handsPlayed === 0 ? 0 : Math.round((player.handsWon / player.handsPlayed) * 100);
+  const lines = [
+    `📊 <b>Your stats${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`,
+    `Hands: ${player.handsPlayed} · Wins: ${player.handsWon} (${winRate}%)`,
+    `Net: ${net >= 0 ? "+" : ""}${formatAmount(net)} · Biggest pot: ${formatAmount(
+      player.biggestPot,
+    )}`,
+  ];
+  if (player.bestHand) {
+    lines.push(`Best hand: ${escapeHtml(player.bestHand)}`);
+  }
+  return lines.join("\n");
+}
+
+export interface HistoryView {
+  handNo: number;
+  won: boolean;
+  delta: number;
+  hole: Card[] | null;
+  board: Card[];
+}
+
+export function historyText(rows: HistoryView[]): string {
+  if (rows.length === 0) {
+    return "📜 No hands played yet.";
+  }
+  const lines = ["📜 <b>Last hands</b>"];
+  for (const row of rows) {
+    const marker = row.won ? "🏆" : "💔";
+    const sign = row.delta >= 0 ? "+" : "−";
+    const parts = [`#${row.handNo}`, marker, `${sign}${formatAmount(Math.abs(row.delta))}`];
+    if (row.hole) {
+      parts.push(cardsText(row.hole));
+    }
+    if (row.board.length > 0) {
+      parts.push(`board: ${cardsText(row.board)}`);
+    }
+    lines.push(parts.join("  "));
+  }
+  return lines.join("\n");
+}
+
+export interface LeaderboardRow {
+  firstName: string;
+  balance: number;
+}
+
+export function leaderboardText(rows: LeaderboardRow[], groupTitle: string | null): string {
+  const lines = [`🏆 <b>Leaderboard${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`];
+  if (rows.length === 0) {
+    lines.push("No chips claimed yet.");
+    return lines.join("\n");
+  }
+  rows.forEach((row, index) => {
+    lines.push(`${index + 1}. ${escapeHtml(row.firstName)}  ${formatAmount(row.balance)}`);
+  });
+  return lines.join("\n");
+}
+
+export function versionText(version: string, webhookUrl: string | null, pending: number): string {
+  return [
+    `🤖 dailypoker.bot v${version}`,
+    `Webhook: ${webhookUrl ?? "not set"}`,
+    `Pending updates: ${pending}`,
+  ].join("\n");
+}
+
+export function resetGroupConfirmText(chatId: number): string {
+  return `⚠️ This wipes all players, balances and history for ${chatId}.\nSend /resetgroup confirm ${chatId} to proceed.`;
+}
+
+export function resetGroupDoneText(chatId: number): string {
+  return `🧹 Group ${chatId} wiped.`;
+}
+
+export function ownerOnlyText(): string {
+  return "Owner only.";
 }

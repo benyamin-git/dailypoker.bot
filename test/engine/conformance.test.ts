@@ -49,7 +49,7 @@ const CONFORMANCE: Record<string, string> = {
   "Effects flag off": "sends no dice messages when effects are disabled",
 };
 
-const PENDING_M3 = new Set(["Balance exactly 100", "Daily claim during an active hand"]);
+const PENDING_M3 = new Set<string>([]);
 
 describe("edge case conformance (03-game-rules §11)", () => {
   it("maps every edge case row to a named test", () => {
