@@ -36,11 +36,11 @@ Implementation starts only after the owner approves this plan.
 
 **Acceptance**
 
-- [ ] `bun run test` + `bun run typecheck` + `bun run lint` all green.
-- [ ] `TEST_HEAVY=1` oracle run green (≥ 1,000,000 randomized 7-card comparisons).
-- [ ] Betting legality matrix has explicit tests for: min-raise matching previous increment,
+- [x] `bun run test` + `bun run typecheck` + `bun run lint` all green.
+- [x] `TEST_HEAVY=1` oracle run green (≥ 1,000,000 randomized 7-card comparisons).
+- [x] Betting legality matrix has explicit tests for: min-raise matching previous increment,
   multiples of 10, cap/all-in, short all-in non-reopening, split remainders.
-- [ ] Engine has zero imports outside `engine/` (checked by a test or lint rule).
+- [x] Engine has zero imports outside `engine/` (checked by a test or lint rule).
 
 ## M2 — Gameplay on the dev bot
 

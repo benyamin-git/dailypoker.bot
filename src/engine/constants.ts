@@ -1,0 +1,13 @@
+export const ANTE = 10;
+export const CAP = 100;
+export const MIN_JOIN_BALANCE = 100;
+export const MIN_BET_STEP = 10;
+export const BET_MULTIPLE = 10;
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 9;
+export const DAILY_AMOUNT = 200;
+export const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+export const TURN_SECONDS = 60;
+export const LOBBY_TTL_MS = 15 * 60 * 1000;
+export const HISTORY_LIMIT = 1000;
+export const CURRENCY_NAME = "chips";

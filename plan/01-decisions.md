@@ -153,6 +153,7 @@ Recorded while implementing M0; each item amends the referenced decision. Veto b
 | A1 | S6 compatibility date | `compatibility_date` is **2026-08-22** (was 2026-09-28) | The locally installed workerd binaries (wrangler 4.143.0 and the one bundled with vitest-pool-workers 0.22.0) reject newer dates; 2026-08-22 is the newest both accept. Production accepts older dates and no v1 feature depends on the exact date. |
 | A2 | 06 §6 migrations key | Schema version lives in `meta.schema_version` (string) instead of `PRAGMA user_version` | Workerd Durable Object SQLite returns `SQLITE_AUTH` ("not authorized") for `PRAGMA user_version` — verified by a probe test. All other schema statements are unchanged. |
 | A3 | S4 test tooling | `vitest` **4.1.11** with `@cloudflare/vitest-pool-workers` 0.22.0 configured via the `cloudflareTest()` Vite plugin; tests are split into `unit` (Node: pure engine/telegram/util) and `workers` (Miniflare: Worker + DO) Vitest projects | 0.22.0 no longer exports `defineWorkersConfig()` and requires vitest ^4.1.0. |
+| A4 | Engine API & constants | Rule constants live in `src/engine/constants.ts` (re-exported by `src/config.ts`); `startHand(state, { rng?, deck?, order? })` takes injected randomness/options; `advanceRunout(state)` and `revealHand(state, userId)` added to the engine API | Keeps `engine/` import-free (M1 acceptance) and lets tests drive ordered seating, known decks and runout steps. |
 
 ## Open items (owner action required before/during M0)
 
