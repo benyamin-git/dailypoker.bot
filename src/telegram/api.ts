@@ -65,6 +65,7 @@ export class SendCapExceededError extends Error {
 }
 
 let transport: typeof fetch = (input, init) => fetch(input, init);
+let defaultMinEditIntervalMs = EDIT_MIN_INTERVAL_MS;
 
 export function setTelegramTransport(next: typeof fetch): void {
   transport = next;
@@ -72,6 +73,10 @@ export function setTelegramTransport(next: typeof fetch): void {
 
 export function resetTelegramTransport(): void {
   transport = (input, init) => fetch(input, init);
+}
+
+export function setDefaultMinEditInterval(ms: number): void {
+  defaultMinEditIntervalMs = ms;
 }
 
 interface PendingEdit {
@@ -91,7 +96,7 @@ export class TelegramApi {
   constructor(
     private readonly token: string,
     private readonly sendCap: number = SEND_CAP_PER_UPDATE,
-    private readonly minEditIntervalMs: number = EDIT_MIN_INTERVAL_MS,
+    private readonly minEditIntervalMs: number = defaultMinEditIntervalMs,
   ) {}
 
   resetPerUpdate(): void {
@@ -181,5 +186,20 @@ export class TelegramApi {
       throw new SendCapExceededError();
     }
     return this.call<TelegramMessage>("sendDice", { chat_id: chatId, emoji });
+  }
+
+  async pinChatMessage(chatId: number, messageId: number): Promise<void> {
+    await this.call("pinChatMessage", {
+      chat_id: chatId,
+      message_id: messageId,
+      disable_notification: true,
+    });
+  }
+
+  async unpinChatMessage(chatId: number, messageId?: number): Promise<void> {
+    await this.call("unpinChatMessage", {
+      chat_id: chatId,
+      ...(messageId === undefined ? {} : { message_id: messageId }),
+    });
   }
 }

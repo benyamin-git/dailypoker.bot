@@ -16,7 +16,7 @@ export {
 
 export const RUNOUT_STEP_MS = 2000;
 export const EDIT_MIN_INTERVAL_MS = 1000;
-export const SEND_CAP_PER_UPDATE = 10;
+export const SEND_CAP_PER_UPDATE = 16;
 export const USER_ACTION_INTERVAL_MS = 1000;
 export const PRUNE_UPDATES_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 export const PRUNE_UPDATES_THRESHOLD = 5000;

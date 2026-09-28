@@ -39,6 +39,18 @@ export default defineConfig({
           include: ["test/do/**/*.test.ts"],
         },
       },
+      {
+        plugins: [
+          cloudflareTest({
+            wrangler: { configPath: "./wrangler.jsonc" },
+            miniflare: { bindings: { ...TEST_BINDINGS, EFFECTS_ENABLED: "false" } },
+          }),
+        ],
+        test: {
+          name: "workers-noeffects",
+          include: ["test/noeffects/**/*.test.ts"],
+        },
+      },
     ],
   },
 });

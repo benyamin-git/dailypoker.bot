@@ -100,6 +100,7 @@ export interface CallbackData {
   matchId: number;
   turnId: number;
   action: string;
+  amount?: number;
 }
 
 export const CALLBACK_ACTIONS = [
@@ -111,27 +112,34 @@ export const CALLBACK_ACTIONS = [
   "fold",
   "check",
   "call",
+  "bet",
   "raise",
   "allin",
   "show",
   "rematch",
+  "cards",
+  "raisecustom",
 ] as const;
 
 export function parseCallbackData(data: string): CallbackData | null {
-  const match = /^m:(\d+):(\d+):([a-z]+)$/.exec(data);
+  const match = /^m:(\d+):(\d+):([a-z]+)(?::(\d+))?$/.exec(data);
   if (!match) {
     return null;
   }
   const matchId = Number(match[1]);
   const turnId = Number(match[2]);
   const action = match[3] as string;
+  const amount = match[4] === undefined ? undefined : Number(match[4]);
   if (!Number.isSafeInteger(matchId) || !Number.isSafeInteger(turnId)) {
     return null;
   }
   if (!(CALLBACK_ACTIONS as readonly string[]).includes(action)) {
     return null;
   }
-  return { matchId, turnId, action };
+  if (amount !== undefined && !Number.isSafeInteger(amount)) {
+    return null;
+  }
+  return amount === undefined ? { matchId, turnId, action } : { matchId, turnId, action, amount };
 }
 
 function toUser(user: z.infer<typeof userSchema>): TelegramUser {
@@ -161,6 +169,12 @@ export function chatIdOf(update: ParsedUpdate): number | undefined {
     update.callback_query?.message?.chat.id ??
     update.my_chat_member?.chat.id
   );
+}
+
+export function chatInfoOf(update: ParsedUpdate): { id: number; type: ChatType } | undefined {
+  const chat =
+    update.message?.chat ?? update.callback_query?.message?.chat ?? update.my_chat_member?.chat;
+  return chat === undefined ? undefined : { id: chat.id, type: chat.type };
 }
 
 export function classifyUpdate(update: ParsedUpdate): Intent {

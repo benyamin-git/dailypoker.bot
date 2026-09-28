@@ -1,4 +1,5 @@
-import { PRUNE_UPDATES_AFTER_MS, PRUNE_UPDATES_THRESHOLD } from "../config";
+import { HISTORY_LIMIT, PRUNE_UPDATES_AFTER_MS, PRUNE_UPDATES_THRESHOLD } from "../config";
+import type { Card, PlayerState } from "../engine/types";
 
 const MIGRATIONS: readonly (readonly string[])[] = [
   [
@@ -110,4 +111,311 @@ export function maybePruneUpdates(sql: SqlStorage, now: number): void {
   if (row.count > PRUNE_UPDATES_THRESHOLD) {
     sql.exec("DELETE FROM processed_updates WHERE at < ?", now - PRUNE_UPDATES_AFTER_MS);
   }
+}
+
+export interface PlayerRow {
+  user_id: number;
+  username: string | null;
+  first_name: string;
+  balance: number;
+  last_daily_at: number | null;
+  dm_started: number;
+  hands_played: number;
+  hands_won: number;
+  chips_won: number;
+  chips_lost: number;
+  biggest_pot: number;
+  best_hand: string | null;
+  created_at: number;
+}
+
+export function getPlayer(sql: SqlStorage, userId: number): PlayerRow | null {
+  const rows = sql
+    .exec("SELECT * FROM players WHERE user_id = ?", userId)
+    .toArray() as unknown as PlayerRow[];
+  return rows[0] ?? null;
+}
+
+export function ensurePlayer(
+  sql: SqlStorage,
+  user: { id: number; firstName: string; username: string | null },
+  now: number,
+): PlayerRow {
+  const existing = getPlayer(sql, user.id);
+  if (existing) {
+    if (existing.first_name !== user.firstName || existing.username !== user.username) {
+      sql.exec(
+        "UPDATE players SET first_name = ?, username = ? WHERE user_id = ?",
+        user.firstName,
+        user.username,
+        user.id,
+      );
+      existing.first_name = user.firstName;
+      existing.username = user.username;
+    }
+    return existing;
+  }
+  sql.exec(
+    `INSERT INTO players (user_id, username, first_name, balance, created_at)
+     VALUES (?, ?, ?, 0, ?)`,
+    user.id,
+    user.username,
+    user.firstName,
+    now,
+  );
+  return {
+    user_id: user.id,
+    username: user.username,
+    first_name: user.firstName,
+    balance: 0,
+    last_daily_at: null,
+    dm_started: 0,
+    hands_played: 0,
+    hands_won: 0,
+    chips_won: 0,
+    chips_lost: 0,
+    biggest_pot: 0,
+    best_hand: null,
+    created_at: now,
+  };
+}
+
+export function setDmStarted(sql: SqlStorage, userId: number): void {
+  sql.exec("UPDATE players SET dm_started = 1 WHERE user_id = ?", userId);
+}
+
+export function adjustBalance(sql: SqlStorage, userId: number, delta: number): void {
+  if (delta === 0) {
+    return;
+  }
+  sql.exec("UPDATE players SET balance = balance + ? WHERE user_id = ?", delta, userId);
+}
+
+export function createMatchRow(sql: SqlStorage, starterId: number, now: number): number {
+  sql.exec(
+    `INSERT INTO matches (hand_no, status, starter_id, created_at)
+     VALUES (NULL, 'lobby', ?, ?)`,
+    starterId,
+    now,
+  );
+  const row = sql.exec("SELECT last_insert_rowid() AS id").one() as { id: number };
+  return row.id;
+}
+
+export function nextHandNo(sql: SqlStorage): number {
+  const row = sql.exec("SELECT COALESCE(MAX(hand_no), 0) + 1 AS next FROM matches").one() as {
+    next: number;
+  };
+  return row.next;
+}
+
+export function setMatchStatus(
+  sql: SqlStorage,
+  matchId: number,
+  status: string,
+  endedAt: number | null = null,
+): void {
+  if (endedAt === null) {
+    sql.exec("UPDATE matches SET status = ? WHERE id = ?", status, matchId);
+  } else {
+    sql.exec("UPDATE matches SET status = ?, ended_at = ? WHERE id = ?", status, endedAt, matchId);
+  }
+}
+
+export function setMatchStarted(
+  sql: SqlStorage,
+  matchId: number,
+  handNo: number,
+  startedAt: number,
+): void {
+  sql.exec(
+    "UPDATE matches SET status = 'active', hand_no = ?, started_at = ? WHERE id = ?",
+    handNo,
+    startedAt,
+    matchId,
+  );
+}
+
+export function deleteMatch(sql: SqlStorage, matchId: number): void {
+  sql.exec("DELETE FROM match_players WHERE match_id = ?", matchId);
+  sql.exec("DELETE FROM matches WHERE id = ?", matchId);
+}
+
+export interface MatchPlayerWrite {
+  userId: number;
+  seatOrder: number;
+  contribution: number;
+  folded: boolean;
+  allIn: boolean;
+  shown: boolean;
+  hole: [Card, Card] | null;
+  delta: number;
+}
+
+export function upsertMatchPlayers(
+  sql: SqlStorage,
+  matchId: number,
+  players: MatchPlayerWrite[],
+): void {
+  for (const player of players) {
+    sql.exec(
+      `INSERT INTO match_players
+         (match_id, user_id, seat_order, contribution, folded, all_in, shown, hole, delta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(match_id, user_id) DO UPDATE SET
+         seat_order = excluded.seat_order,
+         contribution = excluded.contribution,
+         folded = excluded.folded,
+         all_in = excluded.all_in,
+         shown = excluded.shown,
+         hole = excluded.hole,
+         delta = excluded.delta`,
+      matchId,
+      player.userId,
+      player.seatOrder,
+      player.contribution,
+      player.folded ? 1 : 0,
+      player.allIn ? 1 : 0,
+      player.shown ? 1 : 0,
+      player.hole === null ? null : JSON.stringify(player.hole),
+      player.delta,
+    );
+  }
+}
+
+export interface FinishedMatch {
+  matchId: number;
+  endedAt: number;
+  pot: number;
+  board: Card[];
+  winners: number[];
+  log: unknown;
+}
+
+export function finishMatch(sql: SqlStorage, info: FinishedMatch): void {
+  sql.exec(
+    `UPDATE matches
+     SET status = 'done', ended_at = ?, pot = ?, board = ?, winner_ids = ?, log = ?
+     WHERE id = ?`,
+    info.endedAt,
+    info.pot,
+    JSON.stringify(info.board),
+    JSON.stringify(info.winners),
+    JSON.stringify(info.log),
+    info.matchId,
+  );
+}
+
+export function matchPlayerWrites(state: {
+  players: PlayerState[];
+  deltas: Record<number, number>;
+}): MatchPlayerWrite[] {
+  return state.players.map((player) => ({
+    userId: player.userId,
+    seatOrder: player.seat,
+    contribution: player.contribution,
+    folded: player.folded,
+    allIn: player.allIn,
+    shown: player.shown,
+    hole: player.hole,
+    delta: state.deltas[player.userId] ?? 0,
+  }));
+}
+
+export function addHandStats(
+  sql: SqlStorage,
+  userId: number,
+  won: boolean,
+  payout: number,
+  delta: number,
+): void {
+  const chipsWon = delta > 0 ? delta : 0;
+  const chipsLost = delta < 0 ? -delta : 0;
+  sql.exec(
+    `UPDATE players
+     SET hands_played = hands_played + 1,
+         hands_won = hands_won + ?,
+         chips_won = chips_won + ?,
+         chips_lost = chips_lost + ?,
+         biggest_pot = MAX(biggest_pot, ?)
+     WHERE user_id = ?`,
+    won ? 1 : 0,
+    chipsWon,
+    chipsLost,
+    won ? payout : 0,
+    userId,
+  );
+}
+
+export function updateBestHand(
+  sql: SqlStorage,
+  userId: number,
+  handName: string,
+  category: number,
+): void {
+  const player = getPlayer(sql, userId);
+  if (!player) {
+    return;
+  }
+  const stored = player.best_hand;
+  const storedCategory = stored === null ? -1 : categoryFromName(stored);
+  if (category > storedCategory) {
+    sql.exec("UPDATE players SET best_hand = ? WHERE user_id = ?", handName, userId);
+  }
+}
+
+export function categoryFromName(name: string): number {
+  const table: [string, number][] = [
+    ["Straight flush", 8],
+    ["Four of a kind", 7],
+    ["Full house", 6],
+    ["Flush", 5],
+    ["Straight", 4],
+    ["Three of a kind", 3],
+    ["Two pair", 2],
+    ["Pair", 1],
+    ["High card", 0],
+  ];
+  for (const [prefix, category] of table) {
+    if (name.startsWith(prefix)) {
+      return category;
+    }
+  }
+  return -1;
+}
+
+export function leaderboard(sql: SqlStorage, limit = 5): PlayerRow[] {
+  return sql
+    .exec("SELECT * FROM players ORDER BY balance DESC, user_id ASC LIMIT ?", limit)
+    .toArray() as unknown as PlayerRow[];
+}
+
+export function pruneMatches(sql: SqlStorage, limit = HISTORY_LIMIT): void {
+  sql.exec(
+    `DELETE FROM match_players WHERE match_id IN (
+       SELECT id FROM matches ORDER BY id DESC LIMIT -1 OFFSET ?
+     )`,
+    limit,
+  );
+  sql.exec(
+    `DELETE FROM matches WHERE id IN (
+       SELECT id FROM matches ORDER BY id DESC LIMIT -1 OFFSET ?
+     )`,
+    limit,
+  );
+}
+
+export function lastFinishedMatchPlayers(sql: SqlStorage): number[] {
+  const match = sql
+    .exec("SELECT id FROM matches WHERE status = 'done' ORDER BY id DESC LIMIT 1")
+    .toArray() as { id: number }[];
+  const matchId = match[0]?.id;
+  if (matchId === undefined) {
+    return [];
+  }
+  return (
+    sql
+      .exec("SELECT user_id FROM match_players WHERE match_id = ? ORDER BY seat_order ASC", matchId)
+      .toArray() as { user_id: number }[]
+  ).map((row) => row.user_id);
 }

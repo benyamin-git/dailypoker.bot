@@ -26,13 +26,13 @@ const CONFORMANCE: Record<string, string> = {
   "Balance exactly 100": "allows a player with exactly the minimum balance to join",
   "Action by a non-player / spectator": "alerts a non-player privately and changes nothing",
   "Action when not your turn": "alerts a non-actor privately and changes nothing",
-  "Tap on stale buttons (previous turn)": "answers a stale callback with a private alert",
+  "Tap on stale buttons (previous turn)": "rejects stale turn ids with a private alert",
   "Double tap / duplicate callback": "processes a duplicate update_id exactly once",
   "Player joins lobby twice": "treats a second join as idempotent",
-  "Starter leaves their own lobby": "hands the lobby over to the first player who taps takeover",
+  "Starter leaves their own lobby": "hands the lobby over when the starter leaves",
   "/takeover by a non-member or while the starter is present":
-    "rejects take over privately when it does not apply",
-  "Lobby reaches 9 players": "rejects a tenth player with a private alert",
+    "rejects take over from a non-member",
+  "Lobby reaches 9 players": "caps the lobby at nine players",
   "All players fold to one": "ends the hand immediately without revealing cards",
   "Split pot with dead money": "splits with the odd remainder to the earliest hand order",
   "Tie with all players all-in": "splits the pot when all-in players tie",
@@ -49,19 +49,7 @@ const CONFORMANCE: Record<string, string> = {
   "Effects flag off": "sends no dice messages when effects are disabled",
 };
 
-const PENDING_M2_M3 = new Set([
-  "Balance exactly 100",
-  "Action by a non-player / spectator",
-  "Action when not your turn",
-  "Tap on stale buttons (previous turn)",
-  "Player joins lobby twice",
-  "Starter leaves their own lobby",
-  "/takeover by a non-member or while the starter is present",
-  "Lobby reaches 9 players",
-  "Daily claim during an active hand",
-  "Bot kicked from group",
-  "Effects flag off",
-]);
+const PENDING_M3 = new Set(["Balance exactly 100", "Daily claim during an active hand"]);
 
 describe("edge case conformance (03-game-rules §11)", () => {
   it("maps every edge case row to a named test", () => {
@@ -75,7 +63,7 @@ describe("edge case conformance (03-game-rules §11)", () => {
   it("every mapped test exists unless explicitly pending for M2/M3", () => {
     const missing: string[] = [];
     for (const [row, testName] of Object.entries(CONFORMANCE)) {
-      if (PENDING_M2_M3.has(row)) {
+      if (PENDING_M3.has(row)) {
         continue;
       }
       if (!TEST_NAMES.has(testName)) {
@@ -86,7 +74,7 @@ describe("edge case conformance (03-game-rules §11)", () => {
   });
 
   it("keeps the pending list honest: entries are real rows and their tests are coming", () => {
-    for (const row of PENDING_M2_M3) {
+    for (const row of PENDING_M3) {
       expect(CONFORMANCE[row], `unknown pending row: ${row}`).toBeTruthy();
       expect(TEST_NAMES.has(CONFORMANCE[row] as string)).toBe(false);
     }

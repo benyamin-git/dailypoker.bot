@@ -1,7 +1,7 @@
 import type { AppConfig, Bindings } from "./env";
 import { getConfig } from "./env";
 import { TelegramApi } from "./telegram/api";
-import { chatIdOf, updateSchema } from "./telegram/bot";
+import { chatInfoOf, updateSchema } from "./telegram/bot";
 import { GROUP_COMMANDS, PRIVATE_COMMANDS } from "./telegram/commands";
 import { constantTimeEqual } from "./util/crypto";
 import { safeErrorMessage } from "./util/log";
@@ -38,11 +38,12 @@ async function handleWebhook(
   if (!parsed.success) {
     return new Response("ok");
   }
-  const chatId = chatIdOf(parsed.data);
-  if (chatId === undefined) {
+  const chat = chatInfoOf(parsed.data);
+  if (chat === undefined) {
     return new Response("ok");
   }
-  const stub = env.TABLE.get(env.TABLE.idFromName(String(chatId)));
+  const targetId = chat.type === "private" ? config.allowedChatIds[0] : chat.id;
+  const stub = env.TABLE.get(env.TABLE.idFromName(String(targetId)));
   const response = await stub.fetch("https://table.internal/update", {
     method: "POST",
     headers: { "content-type": "application/json" },
