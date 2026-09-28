@@ -49,8 +49,11 @@ development and `wrangler deploy`. No inbound ports, no tunnels, no VPN.
 |---|---|---|
 | Worker | `dailypokerbot-dev` | `dailypokerbot` |
 | Bot | dev bot (separate BotFather token) | prod bot |
-| Allowlist | dev group id(s) | real group id(s) |
+| Allowlist | dev group id | real group id |
 | Purpose | M0–M4 testing | live friend group |
+
+Each environment allowlists **exactly one group** in v1 (env validation rejects multiple ids);
+DM commands (`/daily`, `/balance`, `/stats`, `/history`) target that group's economy.
 
 ## Deploy runbook (manual)
 
@@ -64,10 +67,19 @@ bunx wrangler login
 bunx wrangler secret put BOT_TOKEN        --env dev
 bunx wrangler secret put WEBHOOK_SECRET   --env dev   # random 32+ bytes hex
 bunx wrangler secret put ADMIN_KEY        --env dev   # random, protects admin routes
-bunx wrangler deploy --env dev
+# non-secret config: committed wrangler.jsonc keeps placeholders; real values go here
+bunx wrangler deploy --env dev \
+  --var ALLOWED_CHAT_IDS:<dev-group-id> \
+  --var OWNER_USER_ID:<your-user-id> \
+  --var BOT_USERNAME:<dev-bot-username> \
+  --var WEBHOOK_PATH:<random-hex>
 
 # register the Telegram webhook (the Worker calls Telegram for us)
 curl -sS -X POST "https://dailypokerbot-dev.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/register-webhook" \
+  -H "x-admin-key: $ADMIN_KEY"
+
+# configure the command menus (once, and after command changes)
+curl -sS -X POST "https://dailypokerbot-dev.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/set-commands" \
   -H "x-admin-key: $ADMIN_KEY"
 # same for production with --env production and the prod URL
 ```
@@ -78,7 +90,8 @@ Admin routes (all require `x-admin-key`):
 |---|---|
 | `POST /tg/<path>/admin/register-webhook` | Calls `setWebhook` with the public URL, `secret_token`, `allowed_updates=[message, callback_query, my_chat_member]`, `drop_pending_updates=true` |
 | `GET /tg/<path>/admin/webhook-info` | Proxies `getWebhookInfo` for debugging |
-| `POST /tg/<path>/admin/store-webhook` | Deactivates webhook (`deleteWebhook`) |
+| `POST /tg/<path>/admin/delete-webhook` | Deactivates webhook (`deleteWebhook`) |
+| `POST /tg/<path>/admin/set-commands` | Calls `setMyCommands` for the group and private scopes |
 
 Rollback: `bunx wrangler rollback --env <env>` (Cloudflare keeps recent versions).
 
@@ -88,17 +101,22 @@ Rollback: `bunx wrangler rollback --env <env>` (Cloudflare keeps recent versions
 2. Worker: constant-time compare `X-Telegram-Bot-Api-Secret-Token`; reject non-POST; extract
    `chat.id`; look up the group's DO stub; forward the raw body; return `200` only after the
    DO acknowledges (Telegram retries non-2xx).
-3. DO: dedupe by `update_id`; process; persist; send Telegram messages; (re)schedule the turn
-   alarm. All work is fast; no `waitUntil` needed for correctness.
+3. DO: dedupe by `update_id`; process; persist; send Telegram messages; (re)arm the
+   next-deadline alarm (see Timers). All work is fast; no `waitUntil` needed for correctness.
 4. Duplicate deliveries are harmless (`update_id` dedupe table in DO SQLite).
 
 ## Timers
 
-- One DO alarm = the current turn deadline (`now + 60s`).
-- Every accepted action reschedules the alarm.
-- Alarm handler applies the automatic action (check if free, else fold) and follows the same
-  event pipeline.
-- `setAlarm()` costs 1 row write; a hand uses ≤ ~10 alarms — negligible on the free tier.
+- The DO keeps a **next-deadline scheduler**: every pending deadline is persisted in state
+  (turn deadline, lobby expiry, all-in runout board steps, retry backoff), and a single
+  `setAlarm()` is always armed for the earliest one.
+- Every accepted action refreshes the turn deadline and re-arms the alarm.
+- When the alarm fires, every due deadline is applied (timeout → check if free else fold;
+  lobby TTL → expire; runout step → next board line; backoff → retry the queued send) and the
+  alarm is re-armed for the next deadline.
+- All-in runouts advance one alarm step at a time (~2s apart), so the DO can hibernate
+  between steps instead of sleeping inside a handler.
+- `setAlarm()` costs 1 row write; a hand uses ≤ ~15 alarms — negligible on the free tier.
 
 ## Free-tier budget (verified against official limits)
 
@@ -107,8 +125,8 @@ Per 4-player hand (rough):
 | Resource | Per hand | Free tier/day | Headroom |
 |---|---|---|---|
 | Worker requests (webhook updates ≈ 15) | ~15 | 100,000 | ~6,600 hands |
-| DO requests (updates + alarms ≈ 23) | ~23 | 100,000 | ~4,300 hands |
-| DO row writes (~2/action + alarms) | ~40 | 100,000 | ~2,500 hands |
+| DO requests (updates + alarms ≈ 28) | ~28 | 100,000 | ~3,500 hands |
+| DO row writes (~2/action + alarms) | ~45 | 100,000 | ~2,200 hands |
 | DO duration | seconds | 13,000 GB-s | effectively infinite at this scale |
 | DO storage (1,000 hands × ~5 KB) | — | 5 GB | ~1,000 groups |
 

@@ -43,7 +43,7 @@ planning session. Do not silently change any of them; propose amendments instead
 | H1 | Owner has a Cloudflare account and dashboard access | Confirmed; dashboard is unreachable from Iran but reachable via other means |
 | H2 | Runtime is **100% Cloudflare Workers** (free plan), webhook mode | Home server and Iran network are irrelevant at runtime; CF edge reaches Telegram |
 | H3 | One **Durable Object per Telegram group**, SQLite storage backend | Isolation, serialized writes, free-tier friendly, hibernation |
-| H4 | **Allowlisted groups only** (`ALLOWED_CHAT_IDS`), others ignored silently | Quota protection + privacy + abuse prevention |
+| H4 | **Allowlisted groups only** (`ALLOWED_CHAT_IDS`); unknown groups get **one polite reply, then silence** (second-pass amendment) | Quota protection + privacy + abuse prevention |
 | H5 | Manual `wrangler deploy` (no CI/CD) | Owner choice |
 | H6 | Dev **and** prod Workers + two separate bots | One bot token = one webhook consumer; dev testing requires a separate bot |
 | H7 | Dev workflow: local unit tests → deploy to dev Worker → test in Telegram on phone | Telegram unreachable from dev machine; no VPN wanted |
@@ -86,7 +86,7 @@ planning session. Do not silently change any of them; propose amendments instead
 | E1 | **Play chips only** — no real money, no settlement ledger | Legal/ToS safety, open-source safety |
 | E2 | `/daily` grants **+200 chips**, once per rolling 24h, **stacks** with balance | Owner choice |
 | E3 | `/daily` is claimed **in DM**; a small teaser line is posted in the group | Keeps group clean; social nudge |
-| E4 | Bankroll is **per group** (independent economy + leaderboard per group) | Isolation |
+| E4 | Bankroll is **per group** (independent economy + leaderboard per group); v1 runs **one allowlisted group per environment**, so DM commands are unambiguous | Isolation |
 
 ## UX
 
@@ -118,7 +118,8 @@ to veto:
 1. Postflop action order = same randomized order; first remaining player acts.
 2. On all-in runouts, **all live hands are revealed** (standard poker; they are all-in).
 3. Lobby auto-expires after **15 minutes without a new join**.
-4. `/top` is public in the group; `/balance`, `/stats`, `/history` reply in DM.
+4. `/top` is public in the group; `/balance` replies publicly when used in the group and
+   privately in DM; `/stats` and `/history` reply in DM.
 5. 24h rolling daily cooldown (no timezone/reset-hour logic).
 6. Escrow model: antes/bets deduct from balance as they happen; pot credited at hand end.
 7. Raise UI is street-level ("raise to N"), multiples of 10, cap-aware helper text.
@@ -126,6 +127,22 @@ to veto:
 9. `setMyCommands` configured for group scope and private scope.
 10. Odd remainder chips in split pots go to the earliest players in hand order.
 11. Currency named "chips"; symbol amount formatting `1,000`.
+
+## Second-pass review resolutions (2026-09-28)
+
+| # | Topic | Resolution |
+|---|---|---|
+| 1 | Unknown groups | One polite reply, then silence (amends H4) |
+| 2 | Multiple groups | Exactly one allowlisted group per environment; env validation rejects more (clarifies E4) |
+| 3 | Starter leaves lobby | `Take over` button + `/takeover`; first remaining player becomes starter (03 §3/§11, 04 §4) |
+| 4 | Deploying non-secret vars | Committed placeholders; real values via `wrangler deploy --var KEY:VALUE` (02 runbook, 07 §5) |
+| 5 | Timers | Next-deadline scheduler persisted in state; one alarm armed for the earliest of turn/lobby/runout/backoff (02, 05) |
+| 6 | Onboarding detection | `players.dm_started` set on `/start` (06 schema, 04 §2) |
+| 7 | `/deal` with < 2 players | Edit the lobby message; never delete (04 §6) |
+| 8 | Hand numbering | `matches.hand_no` assigned at deal; canceled/expired lobbies do not consume numbers (06) |
+| 9 | `callback_data` | Documented schema `m:<matchId>:<turnId>:<action>` (05 §6, 07 T4) |
+| 10 | Admin routes | `delete-webhook` replaces `store-webhook`; `set-commands` added for `setMyCommands` (02) |
+| 11 | Worked example | `03-game-rules.md §10` pot arithmetic corrected (160/250/310) |
 
 ## Open items (owner action required before/during M0)
 

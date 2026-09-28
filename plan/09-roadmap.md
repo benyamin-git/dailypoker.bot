@@ -12,7 +12,8 @@ Implementation starts only after the owner approves this plan.
 - Folder structure, package.json, tsconfig, biome, vitest config, wrangler.jsonc (repo and
   `main` branch already initialized 2026-09-28).
 - Worker skeleton: env validation (zod), webhook router with secret header check +
-  constant-time compare, admin routes (`register-webhook`, `webhook-info`, `delete-webhook`).
+  constant-time compare, admin routes (`register-webhook`, `webhook-info`, `delete-webhook`,
+  `set-commands`).
 - `TableDO` skeleton with migrations scaffold and `update_id` dedupe.
 - Minimal grammY reply: `/ping` → `🏓 pong (dev)`; allowlist check for unknown groups.
 - Owner actions: create dev bot + dev group, set secrets, deploy dev, register webhook.
@@ -46,8 +47,10 @@ Implementation starts only after the owner approves this plan.
 **Tasks**
 
 - Lobby → table message editing, keyboards, callback + command handling, deep-link
-  onboarding, DM cards, result message + rematch, dice effects.
-- Timer alarms (60s, auto check/fold), outgoing throttle + 429 handling, stale button alerts.
+  onboarding (`dm_started` flag), starter `Take over`, DM cards, result message + rematch,
+  dice effects.
+- Next-deadline scheduler: 60s turn timer (auto check/fold), lobby TTL, all-in runout steps,
+  outgoing throttle + 429 handling, stale button alerts.
 - Persistence of match state per action in SQLite.
 
 **Acceptance**
@@ -55,6 +58,7 @@ Implementation starts only after the owner approves this plan.
 - [ ] Full hand between 2 real accounts in the dev group, start to finish, all via buttons.
 - [ ] A 9-player stress hand completes; no duplicate/ghost actions.
 - [ ] Timeout fires correctly; stale taps and non-actor taps only produce private alerts.
+- [ ] Starter-leaves → `Take over` hands Deal/Cancel to the new starter.
 - [ ] All-in runout reveals all hands and effects play (flag-gated).
 - [ ] Worker CPU stays comfortably under 10 ms (checked via dashboard metrics).
 

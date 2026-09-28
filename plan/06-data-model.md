@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS players (
   first_name     TEXT NOT NULL,
   balance        INTEGER NOT NULL,     -- chips, per group
   last_daily_at  INTEGER,              -- epoch ms, null = never claimed
+  dm_started     INTEGER NOT NULL DEFAULT 0,  -- 1 after the user's first /start in DM
   hands_played   INTEGER NOT NULL DEFAULT 0,
   hands_won      INTEGER NOT NULL DEFAULT 0,
   chips_won      INTEGER NOT NULL DEFAULT 0,
@@ -32,7 +33,8 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 CREATE TABLE IF NOT EXISTS matches (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- hand number, per group
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- internal row id
+  hand_no     INTEGER,                -- display "Hand #N", assigned at deal; null for lobbies
   status      TEXT NOT NULL,          -- lobby | active | done | canceled | expired
   starter_id  INTEGER NOT NULL,
   created_at  INTEGER NOT NULL,
@@ -73,7 +75,9 @@ CREATE INDEX IF NOT EXISTS idx_mp_user          ON match_players (user_id);
   and join requires ≥ 100.
 - One `matches` row with `status IN ('lobby','active')` at most, per group.
 - `match_players.contribution <= 100`; `contribution` is the sum of escorted chips.
-- `hand_no` = `matches.id` (autoincrement), shown to players as "Hand #N".
+- `hand_no` is assigned at deal (`COUNT(matches WHERE started_at IS NOT NULL) + 1`);
+  canceled/expired lobbies never consume a number, so players see no gaps.
+- `players.dm_started` is set on the first `/start` and gates the onboarding deep-link prompt.
 
 ## 3. Hand log format (JSON in `matches.log`)
 

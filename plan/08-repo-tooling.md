@@ -106,8 +106,9 @@ dailypoker.bot/
 }
 ```
 
-Real values are placeholders in the repo; the owner may keep real ids local (untracked
-override) — deploy-time secrets are always set via `wrangler secret`.
+Real values are placeholders in the repo; the owner passes them at deploy time with
+`wrangler deploy --var KEY:VALUE` (non-secret config) and `wrangler secret` (tokens).
+Local dev reads `.dev.vars` (gitignored).
 
 ## 6. .gitignore / .dev.vars.example
 
@@ -155,6 +156,7 @@ EFFECTS_ENABLED=true
 - Mocked Telegram `fetch` (assert exact method + payloads, capture message ids).
 - Full hand drive: `/newmatch` → joins → deal → actions → showdown with fake clock.
 - Alarm test: `runDurableObjectAlarm` → auto-check/auto-fold applied.
+- Scheduler test: concurrent deadlines (turn + lobby expiry + runout steps) all fire in order.
 - Dedupe test: same `update_id` twice → one effect.
 - Security tests from `07-security.md §9`.
 

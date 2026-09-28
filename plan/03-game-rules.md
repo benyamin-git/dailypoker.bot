@@ -37,7 +37,10 @@ is the authority; the engine tests must encode every clause here.
    naming them.
 5. **Antes** — at deal, 10 chips are deducted from every player (escrow) and paid into the
    pot. The hand then proceeds automatically.
-6. **Cancel** — the starter may cancel before the deal.
+6. **Cancel / take over** — the starter may cancel before the deal. If the starter leaves
+   their own lobby, the lobby stays open and `Take over` appears; the first remaining player
+   to tap it (`/takeover`) becomes the new starter and inherits `Deal`/`Cancel`. Otherwise
+   the lobby expires normally.
 
 ## 4. Dealing
 
@@ -141,13 +144,13 @@ Players A, B, C, D (all balance ≥ 100). Hand order drawn: D, A, C, B.
 - **Deal/ante**: each pays 10 → pot 40; contributions all 10.
 - **Preflop**: D bets 20 (contrib 30). A calls (30). C raises to 40 — legal: previous
   increment 20 → min raise to 40 (contrib 50). B folds (contrib 10, dead money). D calls
-  +20 (50). A calls +20 (50). Pot = 40 + 40 + 40 + 40 + 10 = 170.
+  +20 (50). A calls +20 (50). Pot = 50 + 50 + 50 + 10 (dead B) = 160.
 - **Flop** (order D, A, C): D checks. A bets 30 (contrib 80). C calls (80). D calls (80).
-  Pot = 170 + 90 = 260.
+  Pot = 160 + 90 = 250.
 - **Turn**: D checks. A bets 20 (contrib 100, **all-in**). C calls (100). D calls (100).
-  All three at cap. Pot = 260 + 60 = 320.
+  All three at cap. Pot = 250 + 60 = 310.
 - **River**: no betting possible; dealt automatically; **all three hands revealed**.
-- **Showdown**: best hand wins 320. B's 10 chips stayed in the pot as dead money.
+- **Showdown**: best hand wins 310. B's 10 chips stayed in the pot as dead money.
 
 ### Short all-in example (3 players, cap 100, ante 10)
 
@@ -173,7 +176,8 @@ to re-raise after A's incomplete raise — a direct consequence of the uniform c
 | Tap on stale buttons (previous turn) | Private alert "That move is no longer available" |
 | Double tap / duplicate callback | First processed; second gets stale alert |
 | Player joins lobby twice | Idempotent (already joined) |
-| Starter leaves their own lobby | Allowed; lobby stays open, `Deal` blocked until a new starter exists → lobby expires or is canceled by any remaining player? (v1: remaining players may `Leave`; a new `/newmatch` replaces the expired lobby only) |
+| Starter leaves their own lobby | Lobby stays open and shows `Take over`; first remaining player to tap it (`/takeover`) becomes starter and inherits `Deal`/`Cancel`; if nobody takes over, the lobby expires after 15 min without a new join |
+| `/takeover` by a non-member or while the starter is present | Private alert only (no-op) |
 | Lobby reaches 9 players | Further joins rejected privately ("Table full") |
 | All players fold to one | Hand ends, no reveals |
 | Split pot with dead money | Integer split; remainder to earliest hand order |

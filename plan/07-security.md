@@ -14,7 +14,7 @@ the public repository.
 | T1 | Bot token leaks (repo, logs, screenshots) | Full bot takeover | Secrets via `wrangler secret`; `.dev.vars` gitignored; `.dev.vars.example` has placeholders only; no token in URLs or logs; repo scan before first push |
 | T2 | Webhook endpoint discovered and spoofed | Fake game updates | `X-Telegram-Bot-Api-Secret-Token` constant-time compare **and** random `WEBHOOK_PATH` segment; only POST; reject anything else |
 | T3 | Telegram retries / duplicate delivery | Double actions, double charges | `processed_updates` dedupe by `update_id` |
-| T4 | Forged callback queries / replay of old buttons | Chip theft in-game | `callback_query.from.id` is authoritative; validate actor + turn + `matchId` + `turnId`; stale data rejected with private alert |
+| T4 | Forged callback queries / replay of old buttons | Chip theft in-game | `callback_query.from.id` is authoritative; validate actor + turn + `matchId` + `turnId` against the documented `callback_data` schema (`05-architecture.md §6`); stale data rejected with private alert |
 | T5 | Impersonation via username/display name | Social engineering | Never authorize by username; only by numeric Telegram `user_id` |
 | T6 | Unknown groups add the bot, burn quota | Resource exhaustion | `ALLOWED_CHAT_IDS` allowlist; one polite reply, then silence; no processing, no storage |
 | T7 | Spam / button mashing | Rate limits, cost | Per-user throttle in DO; stale-action rejection; outgoing queue caps |
@@ -64,10 +64,10 @@ Before first push:
 1. `rg -n "bot[0-9]{6,}:|api_token|secret|ADMIN_KEY\s*=" --hidden` → must find only
    `.dev.vars.example` placeholders.
 2. Confirm `.gitignore` covers `.dev.vars`, `.wrangler/`, `node_modules/`, `.env*`.
-3. No real chat ids anywhere: allowlist values live in `wrangler.jsonc`? **No** — real ids
-   live only in `wrangler.jsonc` **local overrides are avoided**; deploy-time values are
-   passed via `wrangler secret`/vars per environment by the owner. Example config in the repo
-   uses obvious placeholders (e.g. `-1001234567890`).
+3. No real chat ids in the repo: committed `wrangler.jsonc` uses obvious placeholders (e.g.
+   `-1001234567890`); real values are passed at deploy time with
+   `wrangler deploy --var KEY:VALUE` (see `02-hosting.md`), and local dev reads the gitignored
+   `.dev.vars`.
 4. README explains self-hosting with the owner's own BotFather token; never ship a shared bot.
 5. Git history starts clean (fresh `git init` on 2026-09-28, plan-only first commit; never
    amend secrets into history).

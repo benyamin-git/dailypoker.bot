@@ -75,5 +75,7 @@ learn a complex interface.
 - **Room** — remaining contribution space (`100 − contribution`).
 - **Deal** — the starter's action that begins the hand.
 - **Lobby** — the join phase before the deal.
+- **Take over** — button (`/takeover`) that hands the starter role to a remaining player
+  after the starter leaves the lobby.
 - **DO** — Cloudflare Durable Object (one per group, SQLite-backed).
 - **Engine** — the pure TypeScript game-logic module (no I/O).

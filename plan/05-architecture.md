@@ -77,7 +77,7 @@ Responsibilities:
 |---|---|
 | Update dedupe | `processed_updates(update_id)` insert-first; skip if exists |
 | Match lifecycle | Lobby state in memory + snapshot persisted; engine drives hand |
-| Timer | Single alarm = current turn deadline; rescheduled on every action |
+| Timers | Next-deadline scheduler: all pending deadlines (turn, lobby TTL, runout steps, backoff) persisted in state; single alarm armed for the earliest |
 | Outgoing calls | All Telegram sends go through `telegram/api.ts` throttling/queue |
 | Persistence | SQLite via `ctx.storage.sql`; snapshot + bankroll/stats updates per action |
 | Migrations | `PRAGMA user_version`; versioned statements run in `blockConcurrencyWhile` on first wake |
@@ -102,14 +102,15 @@ DO:
   4. validate actor + action via legalActions()
   5. persist snapshot + stats
   6. emit telegram sends (edit table, DM cards, dice, result)
-  7. reschedule alarm
+  7. re-arm the next-deadline alarm
 Worker ← DO ack → 200 to Telegram
 ```
 
-**Alarm (timeout)**
+**Alarm (next deadline)**
 
 ```
-DO alarm fires → timeoutAction() → persist → emit sends → next alarm (if hand continues)
+DO alarm fires → apply every due deadline (timeoutAction / lobby expiry / runout step /
+backoff retry) → persist → emit sends → re-arm for the next deadline (if any)
 ```
 
 **Admin routes** (`/tg/<path>/admin/*`) are handled in the Worker, guarded by `x-admin-key`,
@@ -126,6 +127,9 @@ and proxy Telegram webhook management calls (never exposed to groups).
 - `setMyCommands` scopes: `all_group_chats` (group commands) and `all_private_chats` (DM
   commands). Run once via an admin route during M0.
 - HTML mode; every interpolated name passes through `escapeHtml()`.
+- `callback_data` schema (≤ 64 bytes): `m:<matchId>:<turnId>:<action>`, where `action` ∈
+  `join|leave|deal|cancel|takeover|fold|check|call|raise|allin|show|rematch`. Every callback
+  is validated against the current match, turn and actor; stale data → private alert.
 
 ## 7. Failure handling
 

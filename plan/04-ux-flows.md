@@ -16,6 +16,7 @@ live in `src/telegram/messages.ts`. Parse mode: **HTML** (all user names escaped
 | `/leave` | joined player | Leaves lobby (before deal) |
 | `/deal` | starter | Starts the hand (≥2 players) |
 | `/cancel` | starter | Cancels the lobby |
+| `/takeover` | remaining lobby player | Becomes starter after the original starter left |
 | `/fold` `/check` `/call` `/allin` | current actor | Betting actions |
 | `/raise N` | current actor | Raise street bet to `N` (multiple of 10, cap-aware) |
 | `/show` | mucked loser | Voluntarily reveal on the result message |
@@ -55,6 +56,8 @@ The bot never deletes player messages; the delete admin right is only for bot-ho
 5. Bot: validates lobby is open, player eligible (balance ≥ 100), adds them, replies in DM:
    `You're in! I'll DM your cards when the hand starts.` and updates the group lobby.
 6. Players who already onboarded just get joined directly on the `Join` tap.
+7. DM onboarding is tracked per player (`players.dm_started`, set on the first `/start`);
+   absence of the flag is what triggers the deep-link prompt in step 2.
 
 DM welcome text (first `/start` without payload):
 
@@ -94,21 +97,23 @@ Waiting for more players…
 
 - `Join`/`Leave` are validated per user with private alerts.
 - Live `Joined` list updates on every join/leave.
+- If the starter leaves before Deal, `[ Take over ]` is shown to the remaining players;
+  the first tap makes that player the starter (Deal/Cancel move to them).
 - On expiry (15 min no new join): `⌛ Lobby expired. Start a new match with /newmatch.`
 
 ### Table state (after Deal)
 
 ```
 🃏 Daily Poker — Hand #7
-Ante 10 · Pot 120 · Cap 100
+Ante 10 · Pot 180 · Cap 100
 
-🎯 Reza   room 60 · to call 30      ⏳ 52s
-👤 Ali    room 90 · checked
+🎯 Reza   room 60 · to call 60      ⏳ 52s
+👤 Ali    room 60 · to call 60
 👤 Sara   ALL-IN (100)
 
 Board: A♠ K♦ 7♣ — —
 
-[ Fold ] [ Call 30 ] [ Raise ▾ ] [ 🂠 Cards ]
+[ Fold ] [ Call 60 ] [ Raise ▾ ] [ 🂠 Cards ]
 ```
 
 - The **same message** is edited in place; it stays pinned.
@@ -134,7 +139,7 @@ If every remaining player is at the cap:
 Table message final state, plus a fresh short message (not pinned):
 
 ```
-🏆 Reza wins 320 — A♠ A♦
+🏆 Reza wins 300 — A♠ A♦
 Board: A♠ K♦ 7♣ 4♥ 2♠
 
 [ Show my hand ]   [ 🔁 Rematch ]
@@ -205,9 +210,10 @@ Best hand: Full house, Aces over Kings
 | `/raise` not a multiple of 10 | Alert `Amounts are multiples of 10` |
 | Join attempt with balance < 100 | Alert `You need at least 100 chips to play. Claim with /daily.` |
 | Join attempt on a full table | Alert `Table is full (9/9)` |
-| `/deal` with < 2 players | Group message (ephemeral: edited into lobby then removed on next update) |
+| `/deal` with < 2 players | Lobby message is edited to show the error; nothing is ever deleted (see §8) |
 | Second `/newmatch` while lobby open | Alert `A match is already open` |
-| Bot added to non-allowlisted group | Single polite reply (once), then silent; no processing |
+| Bot added to non-allowlisted group | Single polite reply (once per add), then silent; no processing |
+| `/takeover` when not applicable | Private alert only (starter present or user not in lobby) |
 | Unexpected internal error | Private alert `Something glitched. Try again.` + redacted log entry |
 
 ## 7. Formatting conventions
