@@ -282,3 +282,59 @@ export async function runPruneMatches(): Promise<void> {
     store.pruneMatches(state.storage.sql);
   });
 }
+
+export async function insertScriptedCorpus(
+  hands: number,
+  playerOne: number,
+  playerTwo: number,
+): Promise<void> {
+  const stub = groupStub();
+  await runInDurableObject(stub, async (_instance: TableDO, state) => {
+    const sql = state.storage.sql;
+    for (let i = 1; i <= hands; i++) {
+      const winner = i % 2 === 1 ? playerOne : playerTwo;
+      const delta = winner === playerOne ? 10 : -10;
+      sql.exec(
+        `INSERT INTO matches (hand_no, status, starter_id, created_at, started_at, ended_at, pot, board, winner_ids)
+         VALUES (?, 'done', ?, ?, ?, ?, 20, '["As","Kd","7c"]', ?)`,
+        i,
+        playerOne,
+        i,
+        i,
+        i,
+        JSON.stringify([winner]),
+      );
+      const matchId = (sql.exec("SELECT last_insert_rowid() AS id").one() as { id: number }).id;
+      sql.exec(
+        `INSERT INTO match_players (match_id, user_id, seat_order, contribution, folded, all_in, shown, hole, delta)
+         VALUES (?, ?, 0, 10, 0, 0, 0, '["Ah","Kh"]', ?)`,
+        matchId,
+        playerOne,
+        delta,
+      );
+      sql.exec(
+        `INSERT INTO match_players (match_id, user_id, seat_order, contribution, folded, all_in, shown, hole, delta)
+         VALUES (?, ?, 1, 10, 0, 0, 0, '["2c","3d"]', ?)`,
+        matchId,
+        playerTwo,
+        -delta,
+      );
+      store.adjustBalance(sql, playerOne, delta + 10);
+      store.adjustBalance(sql, playerTwo, -delta + 10);
+      store.addHandStats(
+        sql,
+        playerOne,
+        winner === playerOne,
+        winner === playerOne ? 20 : 0,
+        delta,
+      );
+      store.addHandStats(
+        sql,
+        playerTwo,
+        winner === playerTwo,
+        winner === playerTwo ? 20 : 0,
+        -delta,
+      );
+    }
+  });
+}

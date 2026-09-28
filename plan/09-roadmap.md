@@ -72,9 +72,9 @@ Implementation starts only after the owner approves this plan.
 
 **Acceptance**
 
-- [ ] Daily cooldown verified with fake clock; balances never negative.
-- [ ] Leaderboard and history match a hand-computed corpus of 50 scripted hands.
-- [ ] Pruning keeps exactly the newest 1,000 matches; storage stays bounded.
+- [x] Daily cooldown verified with fake clock; balances never negative. (`verifies the cooldown with a fake clock`, `keeps balances non-negative after losing all-in`)
+- [x] Leaderboard and history match a hand-computed corpus of 50 scripted hands. (`matches stats and history to a 50-hand scripted corpus`)
+- [x] Pruning keeps exactly the newest 1,000 matches; storage stays bounded. (`prunes matches down to the newest thousand`)
 
 ## M4 — Polish & first production deploy
 
@@ -86,10 +86,15 @@ Implementation starts only after the owner approves this plan.
 
 **Acceptance**
 
-- [ ] All manual E2E checklist items pass on the dev bot.
-- [ ] Security checklist signed off (repo scan, header tests, allowlist tests).
-- [ ] First live hand played in the real group; zero errors in `wrangler tail`.
-- [ ] `v0.1.0` tag on GitHub (no LICENSE — see `01-decisions.md` R2).
+- [ ] All manual E2E checklist items pass on the dev bot. (owner: needs the dev bot deployed)
+- [x] Security checklist signed off (repo scan, header tests, allowlist tests). (2026-09-28, `07-security.md §5`)
+- [ ] First live hand played in the real group; zero errors in `wrangler tail`. (owner)
+- [ ] `v0.1.0` tag on GitHub (no LICENSE — see `01-decisions.md` R2). (after the first live hand)
+
+**Implementation notes (2026-09-28):** code, README (self-host runbook, commands reference,
+security notes), ToS check (`07-security.md §7`) and admin-route tests (register/set-commands/
+webhook-info) are done. The three remaining boxes require the owner's BotFather + Cloudflare
+credentials; `01-decisions.md` has the amendment log (A1–A6) and milestone status.
 
 ---
 
@@ -110,5 +115,5 @@ Implementation starts only after the owner approves this plan.
 - [ ] BotFather: register dev + prod bots; choose usernames; display name "Daily Poker".
 - [ ] Cloudflare: create dev + prod workers; `wrangler` API token; secrets per env.
 - [ ] Groups: dev + prod groups; bot admin with pin + delete only; collect chat ids.
-- [ ] Telegram ToS gambling wording check before public launch; record in `07-security.md §7`.
+- [x] Telegram ToS gambling wording check before public launch; recorded in `07-security.md §7` (2026-09-28).
 - [ ] Decide on LICENSE when the repo goes public (currently none).

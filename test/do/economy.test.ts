@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetTelegramTransport, setDefaultMinEditInterval } from "../../src/telegram/api";
 import { formatAmount } from "../../src/telegram/messages";
 import {
@@ -9,6 +9,7 @@ import {
   getPlayerRow,
   getTableState,
   insertFakeMatches,
+  insertScriptedCorpus,
   installMockTelegram,
   messageUpdate,
   postUpdate,
@@ -121,6 +122,31 @@ describe("daily claim", () => {
     expect(texts(calls, P1)[0]).toContain("+200 chips claimed");
   });
 
+  it("verifies the cooldown with a fake clock", async () => {
+    await seedPlayer(P1, "Ali", 0, true);
+    const spy = vi.spyOn(Date, "now");
+    const base = 1_800_000_000_000;
+    spy.mockReturnValue(base);
+    try {
+      const calls = installMockTelegram();
+      await dm(P1, "/daily");
+      expect(await getBalance(P1)).toBe(200);
+
+      spy.mockReturnValue(base + 23 * 60 * 60 * 1000);
+      calls.length = 0;
+      await dm(P1, "/daily");
+      expect(await getBalance(P1)).toBe(200);
+      expect(texts(calls, P1)[0]).toContain("Already claimed");
+
+      spy.mockReturnValue(base + 24 * 60 * 60 * 1000 + 1);
+      calls.length = 0;
+      await dm(P1, "/daily");
+      expect(await getBalance(P1)).toBe(400);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("allows a daily claim during an active hand", async () => {
     await seedPlayer(P1, "Ali", 200, true);
     await seedPlayer(P2, "Reza", 200, true);
@@ -206,6 +232,26 @@ describe("balance, stats and history", () => {
     expect(top).toContain("Leaderboard");
     const order = top.indexOf("Ali") < top.indexOf("Reza");
     expect(order).toBe(balance >= (await getBalance(P2)));
+  });
+
+  it("matches stats and history to a 50-hand scripted corpus", async () => {
+    await seedPlayer(P1, "Ali", 200, true);
+    await seedPlayer(P2, "Reza", 200, true);
+    const calls = installMockTelegram();
+    await insertScriptedCorpus(50, P1, P2);
+
+    await dm(P1, "/stats");
+    const stats = texts(calls, P1)[0] as string;
+    expect(stats).toContain("Hands: 50 · Wins: 25 (50%)");
+    expect(stats).toContain("Net: +0");
+
+    calls.length = 0;
+    await dm(P1, "/history 20");
+    const history = texts(calls, P1)[0] as string;
+    const lines = history.split("\n").filter((line) => line.startsWith("#"));
+    expect(lines).toHaveLength(20);
+    expect(lines[0]).toContain("#50");
+    expect(lines[19]).toContain("#31");
   });
 
   it("keeps balances non-negative after losing all-in", async () => {

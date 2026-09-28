@@ -155,6 +155,24 @@ Recorded while implementing M0; each item amends the referenced decision. Veto b
 | A3 | S4 test tooling | `vitest` **4.1.11** with `@cloudflare/vitest-pool-workers` 0.22.0 configured via the `cloudflareTest()` Vite plugin; tests are split into `unit` (Node: pure engine/telegram/util) and `workers` (Miniflare: Worker + DO) Vitest projects | 0.22.0 no longer exports `defineWorkersConfig()` and requires vitest ^4.1.0. |
 | A4 | Engine API & constants | Rule constants live in `src/engine/constants.ts` (re-exported by `src/config.ts`); `startHand(state, { rng?, deck?, order? })` takes injected randomness/options; `advanceRunout(state)` and `revealHand(state, userId)` added to the engine API | Keeps `engine/` import-free (M1 acceptance) and lets tests drive ordered seating, known decks and runout steps. |
 
+## Implementation amendments (2026-09-28, during M2–M4)
+
+| # | Topic | Amendment | Reason |
+|---|---|---|---|
+| A5 | 05 §6 callback schema | `callback_data` is `m:<matchId>:<turnId>:<action>[:<amount>]`; actions are `join`, `leave`, `deal`, `cancel`, `takeover`, `call`, `check`, `fold`, `bet`, `raise`, `raisecustom`, `allin`, `cards`, `show`, `rematch`, `confirmreset` | The extra optional `amount` field carries preset bet/raise sizes, and the M2/M3 UI needs `cards` (DM hole cards) plus `raisecustom` (raise-by-typing menu). Actor/turn/match validation is unchanged. |
+| A6 | M4 README | `README.md` carries the full self-host runbook (BotFather, secrets, deploy vars, webhook registration, config reference, manual E2E pointers) | M4 deliverable; keeps `plan/02-hosting.md` as the design source and gives the operator one copy-pasteable entry point. |
+
+## Milestone status (2026-09-28)
+
+Code, tests and docs for M0–M4 are complete and pushed on `main` (commits `85de8dc`, `88991e2`,
+`5c57085`, `2a69972`, and the M4 commit). Outstanding items are owner-credentials work only:
+
+- M0/M2/M4 acceptance items that need the real dev bot (`wrangler deploy`, Telegram round-trip,
+  `wrangler tail`) are unticked in `09-roadmap.md` — they cannot run from the dev machine.
+- M3 acceptance is fully ticked (see tests named in `test/do/economy.test.ts`).
+- Open items below (BotFather, Cloudflare, groups, ToS) remain owner actions; the ToS wording
+  check is answered in `07-security.md §7`.
+
 ## Open items (owner action required before/during M0)
 
 1. **BotFather:** register prod bot and dev bot, choose usernames, set display name

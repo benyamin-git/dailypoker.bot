@@ -73,6 +73,14 @@ Before first push:
    amend secrets into history).
 6. No LICENSE (owner decision R2) — README states this explicitly so users are not misled.
 
+**Sign-off (2026-09-28, M4):** secret scan (`grep -RInE "bot[0-9]{6,}:|api_token|ADMIN_KEY\s*=|BOT_TOKEN\s*="`
+excluding `node_modules/`, `.git/`, `.wrangler/`) returns only placeholders in
+`.dev.vars.example`, plan examples, and the dummy `test-admin-key-00000000` in
+`test/do/webhook.test.ts`. `git check-ignore` confirms `.dev.vars`, `node_modules/`, and
+`.wrangler/` are ignored; no `.dev.vars` exists in the repo. Committed history holds feature
+commits only. README covers self-hosting with the operator's own credentials, states the no-
+license position, and documents the play-money disclaimer.
+
 ## 6. Fairness & trust
 
 - Shuffling uses `crypto.getRandomValues` (CSPRNG) inside the Durable Object.
@@ -84,8 +92,19 @@ Before first push:
 
 - Play chips only; no payments, no transfers between players, no real-money settlement.
 - No external assets (stickers/images) shipped; only Telegram built-in effects.
-- Task before public launch: read the current Telegram Bot Developer ToS wording on gambling
-  and record the conclusion in this file (open item in `01-decisions.md`).
+- **Check done 2026-09-28:** the current [Telegram Bot Platform Developer Terms]
+  (telegram.org/tos/bot-developers, retrieved via the Wayback Machine because telegram.org is
+  unreachable from the dev machine; capture dated 2026-08-29) contain **no explicit gambling
+  prohibition**. Relevant clauses: 5.2(h) (no "illegal, pirated, regulated or questionable
+  goods and services"), 5.2(b) (no spam), 9 (compliance with local laws), 4.2 (delete user
+  data on request / when no longer needed), 4.4 (reasonable security practices), 6.2 (Stars
+  required for digital goods if we ever charge — v1 does not).
+- Conclusion: a play-money, no-payment, allowlisted friend-group game is compatible with the
+  terms. Do not add real-value stakes, chip sales/transfers, or Stars payments without
+  re-checking. Data retention is bounded (1,000-match prune, `/resetgroup`) and a data-deletion
+  request can be honored by the owner via `/resetgroup` plus BotFather bot deletion.
+- Owner-facing hygiene: never publish tokens (4.5), keep the privacy story true (only profile
+  basics + game data are stored).
 
 ## 8. Incident playbook
 

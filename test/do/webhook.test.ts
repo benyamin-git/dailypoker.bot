@@ -1,69 +1,31 @@
 import { reset, SELF } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { resetTelegramTransport, setTelegramTransport } from "../../src/telegram/api";
+import { resetTelegramTransport } from "../../src/telegram/api";
+import {
+  cleanStorage,
+  GROUP_ID,
+  installMockTelegram,
+  messageUpdate,
+  postUpdate,
+  type TelegramCall,
+} from "./helpers";
 
 const WEBHOOK_PATH = "test-webhook-path";
 const SECRET = "test-webhook-secret-0000";
-const ALLOWED_CHAT_ID = -1009999999999;
+const ADMIN_KEY = "test-admin-key-00000000";
 const UNKNOWN_CHAT_ID = -1007777777777;
 
-interface TelegramCall {
-  method: string;
-  payload: Record<string, unknown>;
+function installLocalMock(): TelegramCall[] {
+  return installMockTelegram();
 }
 
-function installMockTelegram(): TelegramCall[] {
-  const calls: TelegramCall[] = [];
-  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url =
-      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    const method = url.split("/").pop() ?? "";
-    const payload = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
-    calls.push({ method, payload });
-    const result =
-      method === "sendMessage" ? { message_id: calls.length, chat: { id: payload.chat_id } } : true;
-    return new Response(JSON.stringify({ ok: true, result }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  }) as typeof fetch;
-  setTelegramTransport(fetcher);
-  return calls;
-}
-
-function messageUpdate(updateId: number, chatId: number, text: string) {
-  return {
-    update_id: updateId,
-    message: {
-      message_id: updateId,
-      from: { id: 42, first_name: "Ali", username: "ali", is_bot: false },
-      chat: { id: chatId, type: "supergroup", title: "Test Group" },
-      text,
-    },
-  };
-}
-
-interface PostOptions {
-  path?: string;
-  secret?: string | null;
-  method?: string;
-}
-
-async function postUpdate(update: unknown, options: PostOptions = {}): Promise<Response> {
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (options.secret !== null) {
-    headers["X-Telegram-Bot-Api-Secret-Token"] = options.secret ?? SECRET;
-  }
-  const method = options.method ?? "POST";
-  return SELF.fetch(`https://example.com${options.path ?? `/tg/${WEBHOOK_PATH}`}`, {
-    method,
-    headers,
-    ...(method === "POST" ? { body: JSON.stringify(update) } : {}),
-  });
+function sentTo(calls: TelegramCall[], chatId: number): TelegramCall[] {
+  return calls.filter((call) => call.method === "sendMessage" && call.payload.chat_id === chatId);
 }
 
 beforeEach(async () => {
+  await cleanStorage();
   await reset();
 });
 
@@ -73,63 +35,114 @@ afterEach(() => {
 
 describe("webhook routing", () => {
   it("rejects POSTs without the secret header", async () => {
-    const response = await postUpdate(messageUpdate(1, ALLOWED_CHAT_ID, "/ping"), {
-      secret: null,
-    });
+    const response = await postUpdate(messageUpdate(1, GROUP_ID, 42, "/ping"), { secret: null });
     expect(response.status).toBe(403);
   });
 
   it("rejects POSTs with a wrong secret", async () => {
-    const response = await postUpdate(messageUpdate(1, ALLOWED_CHAT_ID, "/ping"), {
+    const response = await postUpdate(messageUpdate(1, GROUP_ID, 42, "/ping"), {
       secret: "wrong-secret-value",
     });
     expect(response.status).toBe(403);
   });
 
   it("returns 404 for the wrong path", async () => {
-    const response = await postUpdate(messageUpdate(1, ALLOWED_CHAT_ID, "/ping"), {
+    const response = await postUpdate(messageUpdate(1, GROUP_ID, 42, "/ping"), {
       path: "/tg/not-the-path",
     });
     expect(response.status).toBe(404);
   });
 
   it("rejects non-POST requests on the webhook path", async () => {
-    const response = await postUpdate(messageUpdate(1, ALLOWED_CHAT_ID, "/ping"), {
-      method: "GET",
-    });
+    const response = await postUpdate(messageUpdate(1, GROUP_ID, 42, "/ping"), { method: "GET" });
     expect(response.status).toBe(405);
   });
 });
 
 describe("ping", () => {
   it("replies pong in the allowlisted group", async () => {
-    const calls = installMockTelegram();
-    const response = await postUpdate(messageUpdate(1, ALLOWED_CHAT_ID, "/ping"));
+    const calls = installLocalMock();
+    const response = await postUpdate(messageUpdate(1, GROUP_ID, 42, "/ping"));
     expect(response.status).toBe(200);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.method).toBe("sendMessage");
-    expect(calls[0]?.payload.chat_id).toBe(ALLOWED_CHAT_ID);
+    expect(calls[0]?.payload.chat_id).toBe(GROUP_ID);
     expect(calls[0]?.payload.text).toBe("🏓 pong (dev)");
   });
 });
 
 describe("allowlist", () => {
   it("sends one polite reply to an unknown group, then silence", async () => {
-    const calls = installMockTelegram();
-    await postUpdate(messageUpdate(1, UNKNOWN_CHAT_ID, "/ping"));
+    const calls = installLocalMock();
+    await postUpdate(messageUpdate(1, UNKNOWN_CHAT_ID, 42, "/ping"));
     expect(calls).toHaveLength(1);
     expect(String(calls[0]?.payload.text)).toContain("private");
-    await postUpdate(messageUpdate(2, UNKNOWN_CHAT_ID, "/ping"));
+    await postUpdate(messageUpdate(2, UNKNOWN_CHAT_ID, 42, "/ping"));
     expect(calls).toHaveLength(1);
   });
 });
 
 describe("update dedupe", () => {
   it("processes a duplicate update_id exactly once", async () => {
-    const calls = installMockTelegram();
-    const update = messageUpdate(1, ALLOWED_CHAT_ID, "/ping");
+    const calls = installLocalMock();
+    const update = messageUpdate(1, GROUP_ID, 42, "/ping");
     await postUpdate(update);
     await postUpdate(update);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("admin routes", () => {
+  it("rejects admin calls without the admin key", async () => {
+    const response = await SELF.fetch(`https://example.com/tg/${WEBHOOK_PATH}/admin/webhook-info`);
+    expect(response.status).toBe(403);
+  });
+
+  it("registers the webhook with the secret token and allowed updates", async () => {
+    const calls = installLocalMock();
+    const response = await SELF.fetch(
+      `https://example.com/tg/${WEBHOOK_PATH}/admin/register-webhook`,
+      { method: "POST", headers: { "x-admin-key": ADMIN_KEY } },
+    );
+    expect(response.status).toBe(200);
+    const setWebhook = calls.find((call) => call.method === "setWebhook");
+    expect(setWebhook?.payload.url).toBe(`https://example.com/tg/${WEBHOOK_PATH}`);
+    expect(setWebhook?.payload.secret_token).toBe(SECRET);
+    expect(setWebhook?.payload.allowed_updates).toEqual([
+      "message",
+      "callback_query",
+      "my_chat_member",
+    ]);
+    expect(setWebhook?.payload.drop_pending_updates).toBe(true);
+  });
+
+  it("configures group and private command scopes", async () => {
+    const calls = installLocalMock();
+    const response = await SELF.fetch(`https://example.com/tg/${WEBHOOK_PATH}/admin/set-commands`, {
+      method: "POST",
+      headers: { "x-admin-key": ADMIN_KEY },
+    });
+    expect(response.status).toBe(200);
+    const commands = calls.filter((call) => call.method === "setMyCommands");
+    expect(commands).toHaveLength(2);
+    const scopes = commands.map((call) => (call.payload.scope as { type: string }).type).sort();
+    expect(scopes).toEqual(["all_group_chats", "all_private_chats"]);
+  });
+
+  it("proxies webhook info for debugging", async () => {
+    installLocalMock();
+    const response = await SELF.fetch(`https://example.com/tg/${WEBHOOK_PATH}/admin/webhook-info`, {
+      headers: { "x-admin-key": ADMIN_KEY },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ url: "https://example.com" });
+  });
+});
+
+describe("unknown groups", () => {
+  it("does not invoke telegram for non-allowlisted chats beyond one reply", async () => {
+    const calls = installLocalMock();
+    await postUpdate(messageUpdate(1, UNKNOWN_CHAT_ID, 42, "/newmatch"));
+    expect(sentTo(calls, UNKNOWN_CHAT_ID)).toHaveLength(1);
   });
 });
