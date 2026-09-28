@@ -144,6 +144,16 @@ to veto:
 | 10 | Admin routes | `delete-webhook` replaces `store-webhook`; `set-commands` added for `setMyCommands` (02) |
 | 11 | Worked example | `03-game-rules.md §10` pot arithmetic corrected (160/250/310) |
 
+## Implementation amendments (2026-09-28, during M0)
+
+Recorded while implementing M0; each item amends the referenced decision. Veto by reverting.
+
+| # | Topic | Amendment | Reason |
+|---|---|---|---|
+| A1 | S6 compatibility date | `compatibility_date` is **2026-08-22** (was 2026-09-28) | The locally installed workerd binaries (wrangler 4.143.0 and the one bundled with vitest-pool-workers 0.22.0) reject newer dates; 2026-08-22 is the newest both accept. Production accepts older dates and no v1 feature depends on the exact date. |
+| A2 | 06 §6 migrations key | Schema version lives in `meta.schema_version` (string) instead of `PRAGMA user_version` | Workerd Durable Object SQLite returns `SQLITE_AUTH` ("not authorized") for `PRAGMA user_version` — verified by a probe test. All other schema statements are unchanged. |
+| A3 | S4 test tooling | `vitest` **4.1.11** with `@cloudflare/vitest-pool-workers` 0.22.0 configured via the `cloudflareTest()` Vite plugin; tests are split into `unit` (Node: pure engine/telegram/util) and `workers` (Miniflare: Worker + DO) Vitest projects | 0.22.0 no longer exports `defineWorkersConfig()` and requires vitest ^4.1.0. |
+
 ## Open items (owner action required before/during M0)
 
 1. **BotFather:** register prod bot and dev bot, choose usernames, set display name

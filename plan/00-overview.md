@@ -1,7 +1,8 @@
 # 00 — Overview
 
 **Project:** `dailypoker.bot`
-**Status:** Planning complete (2026-09-28). Implementation **not started**.
+**Status:** Implementation in progress (M0 code complete 2026-09-28; deploy steps pending owner).
+Planning completed 2026-09-28.
 **One-liner:** A social-first poker bot for private friend groups that lives entirely inside a
 Telegram group chat and runs on the Cloudflare Workers free tier.
 

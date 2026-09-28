@@ -1,0 +1,8 @@
+BOT_TOKEN=123456:REPLACE_ME
+WEBHOOK_SECRET=replace-with-random-hex
+ADMIN_KEY=replace-with-random-value
+ALLOWED_CHAT_IDS=-1001234567890
+OWNER_USER_ID=123456789
+BOT_USERNAME=your_dev_bot
+WEBHOOK_PATH=replace-with-random-hex
+EFFECTS_ENABLED=true

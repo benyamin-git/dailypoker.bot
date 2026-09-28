@@ -93,7 +93,7 @@ dailypoker.bot/
 {
   "name": "dailypokerbot",
   "main": "src/index.ts",
-  "compatibility_date": "2026-09-28",
+  "compatibility_date": "2026-08-22",
   "durable_objects": {
     "bindings": [{ "name": "TABLE", "class_name": "TableDO" }]
   },

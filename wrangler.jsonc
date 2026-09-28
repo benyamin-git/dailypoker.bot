@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dailypokerbot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "durable_objects": {
+    "bindings": [{ "name": "TABLE", "class_name": "TableDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TableDO"] }],
+  "vars": {
+    "EFFECTS_ENABLED": "true"
+  },
+  "env": {
+    "dev": {
+      "name": "dailypokerbot-dev",
+      "durable_objects": {
+        "bindings": [{ "name": "TABLE", "class_name": "TableDO" }]
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TableDO"] }],
+      "vars": {
+        "ALLOWED_CHAT_IDS": "-1001234567890",
+        "OWNER_USER_ID": "123456789",
+        "BOT_USERNAME": "dailypoker_dev_bot",
+        "WEBHOOK_PATH": "replace-with-random-hex",
+        "EFFECTS_ENABLED": "true"
+      }
+    },
+    "production": {
+      "name": "dailypokerbot",
+      "durable_objects": {
+        "bindings": [{ "name": "TABLE", "class_name": "TableDO" }]
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TableDO"] }],
+      "vars": {
+        "ALLOWED_CHAT_IDS": "-1000000000000",
+        "OWNER_USER_ID": "123456789",
+        "BOT_USERNAME": "dailypoker_bot",
+        "WEBHOOK_PATH": "replace-with-random-hex",
+        "EFFECTS_ENABLED": "true"
+      }
+    }
+  }
+}
