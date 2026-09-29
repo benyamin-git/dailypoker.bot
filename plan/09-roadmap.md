@@ -96,8 +96,10 @@ security notes), ToS check (`07-security.md §7`) and admin-route tests (registe
 webhook-info) are done. The **dev environment is deployed and live**: secrets uploaded, vars
 set, `setWebhook` + `setMyCommands` succeeded against the real bot, and Telegram accepted the
 webhook (see `02-hosting.md` → *Operating from Iran* for the network workaround used).
-Remaining: the three boxes below need the owner to play a hand in the group; `v0.1.0` tag
-follows that. Production deploy additionally needs either a second BotFather bot or
+The group message model was then reworked to **play-by-play** (one fresh message per action;
+lobby pinned only until the deal, then unpinned) — implemented, tested and deployed to dev the
+same day; see `04-ux-flows.md §4`. Remaining: the three boxes below need the owner to play a
+hand in the group; `v0.1.0` tag follows that. Production deploy additionally needs either a second BotFather bot or
 re-pointing the webhook to the prod Worker (one bot = one webhook). Owner ids and group ids
 live only in the gitignored `.dev.vars`; never commit them.
 

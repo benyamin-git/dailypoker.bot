@@ -1,5 +1,14 @@
-import { ANTE, CAP, CURRENCY_NAME, DAILY_AMOUNT, MAX_PLAYERS, MIN_JOIN_BALANCE } from "../config";
-import type { Card, MatchState, PlayerState } from "../engine/types";
+import {
+  ANTE,
+  CAP,
+  CURRENCY_NAME,
+  DAILY_AMOUNT,
+  MAX_PLAYERS,
+  MIN_JOIN_BALANCE,
+  MIN_PLAYERS,
+  TURN_SECONDS,
+} from "../config";
+import type { ActionKind, Card, MatchState, PlayerState, Street } from "../engine/types";
 import { formatDuration } from "../util/time";
 
 const SUIT_SYMBOL: Record<string, string> = { s: "♠", h: "♥", d: "♦", c: "♣" };
@@ -21,14 +30,6 @@ export function cardText(card: Card): string {
 
 export function cardsText(cards: readonly Card[]): string {
   return cards.map(cardText).join(" ");
-}
-
-export function boardLine(board: readonly Card[]): string {
-  const slots: string[] = [];
-  for (let i = 0; i < 5; i++) {
-    slots.push(board[i] ? cardText(board[i] as Card) : "—");
-  }
-  return `Board: ${slots.join(" ")}`;
 }
 
 function nameOf(names: Map<number, string>, userId: number): string {
@@ -108,9 +109,9 @@ export function lobbyText(view: LobbyView): string {
   const joined = view.playerIds.map((id) => nameOf(view.names, id)).join(", ") || "—";
   const lines = [
     "🃏 <b>Daily Poker — Lobby</b>",
-    `Ante ${ANTE} · Cap ${CAP} · 2–${MAX_PLAYERS} players`,
+    `Ante ${ANTE} each · max ${CAP} per hand · ${MIN_PLAYERS}–${MAX_PLAYERS} players`,
     "",
-    `Starter: ${starter}`,
+    `Can deal: ${starter}`,
     `Joined (${view.playerIds.length}): ${joined}`,
   ];
   if (view.error) {
@@ -123,53 +124,153 @@ export function lobbyText(view: LobbyView): string {
   return lines.join("\n");
 }
 
-export interface TableView {
+export function lobbyStartedText(handNo: number): string {
+  return `✅ Hand #${handNo} started — updates below.`;
+}
+
+export type TableActivity =
+  | { type: "start" }
+  | { type: "action"; userId: number; kind: ActionKind; to: number | null }
+  | { type: "timeout"; userId: number; kind: "check" | "fold" }
+  | { type: "street"; street: Street; cards: Card[] };
+
+export interface ActivityView {
   match: MatchState;
   names: Map<number, string>;
-  secondsLeft: number | null;
+  activity: TableActivity;
 }
 
-function statusLine(view: TableView, player: PlayerState): string {
-  const name = nameOf(view.names, player.userId).padEnd(12).slice(0, 12);
-  if (player.folded) {
-    return `✖ ${name} folded`;
+const STREET_LABEL: Record<Street, string> = {
+  preflop: "Preflop",
+  flop: "Flop",
+  turn: "Turn",
+  river: "River",
+  showdown: "Showdown",
+};
+
+function headline(view: ActivityView): string {
+  const { names, activity } = view;
+  let text: string;
+  switch (activity.type) {
+    case "start": {
+      const first = view.match.actorUserId;
+      const name = first === null ? "—" : nameOf(names, first);
+      text = `🚀 Hand #${view.match.handNo} — ${name} acts first`;
+      break;
+    }
+    case "action": {
+      const name = nameOf(names, activity.userId);
+      switch (activity.kind) {
+        case "fold":
+          text = `❌ ${name} folds`;
+          break;
+        case "check":
+          text = `✅ ${name} checks`;
+          break;
+        case "call":
+          text = `📞 ${name} calls ${formatAmount(activity.to ?? 0)}`;
+          break;
+        case "bet":
+          text = `🔥 ${name} bets ${formatAmount(activity.to ?? 0)}`;
+          break;
+        case "raise":
+          text = `🔥 ${name} raises to ${formatAmount(activity.to ?? 0)}`;
+          break;
+        case "allin":
+          text = `🚨 ${name} is all-in — ${formatAmount(activity.to ?? 0)}`;
+          break;
+      }
+      break;
+    }
+    case "timeout": {
+      const name = nameOf(names, activity.userId);
+      const verb = activity.kind === "check" ? "checked" : "folded";
+      text = `⏰ ${name} timed out — ${verb}`;
+      break;
+    }
+    case "street":
+      text = `🎲 ${STREET_LABEL[activity.street]}: ${cardsText(activity.cards)}`;
+      break;
   }
-  if (player.allIn) {
-    return `👤 ${name} ALL-IN (${CAP})`;
-  }
-  const room = CAP - player.contribution;
-  const call = Math.max(0, view.match.currentBet - player.streetContribution);
-  const isActor = view.match.actorUserId === player.userId;
-  const prefix = isActor ? "🎯" : "👤";
-  const callText = call > 0 ? ` · to call ${call}` : " · to call 0";
-  const timer = isActor && view.secondsLeft !== null ? `  ⏳ ${view.secondsLeft}s` : "";
-  return `${prefix} ${name} room ${room}${callText}${timer}`;
+  return text;
 }
 
-export function tableText(view: TableView): string {
-  const { match } = view;
+function boardText(board: readonly Card[]): string | null {
+  if (board.length === 0) {
+    return null;
+  }
+  const slots: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    slots.push(board[i] ? cardText(board[i] as Card) : "—");
+  }
+  return `Board: ${slots.join(" ")}`;
+}
+
+function stateLines(match: MatchState, names: Map<number, string>): string[] {
+  const anteTotal = ANTE * match.players.length;
+  const bets = match.pot - anteTotal;
+  const potDetail =
+    bets > 0
+      ? `💰 Pot ${formatAmount(match.pot)} (${formatAmount(anteTotal)} ante + ${formatAmount(
+          bets,
+        )} bets)`
+      : `💰 Pot ${formatAmount(match.pot)} (${formatAmount(anteTotal)} ante)`;
   const lines = [
-    `🃏 <b>Daily Poker — Hand #${match.handNo}</b>`,
-    `Ante ${ANTE} · Pot ${formatAmount(match.pot)} · Cap ${CAP}`,
-    "",
-    "<pre>",
+    `🃏 Hand #${match.handNo} — ${STREET_LABEL[match.street]} · ${potDetail} · cap ${CAP}`,
   ];
+  const board = boardText(match.board);
+  if (board) {
+    lines.push(board);
+  }
   const seated = match.order
     .map((userId) => match.players.find((player) => player.userId === userId))
     .filter((player): player is PlayerState => player !== undefined);
+  lines.push("", "Still in");
   for (const player of seated) {
-    lines.push(statusLine(view, player));
-  }
-  lines.push("</pre>", "");
-  if (match.revealed) {
-    for (const player of match.players) {
-      if (!player.folded && player.hole) {
-        lines.push(`👁 ${nameOf(view.names, player.userId)}: ${cardsText(player.hole)}`);
-      }
+    if (player.folded) {
+      continue;
     }
-    lines.push("");
+    const stack = player.allIn
+      ? `all-in ${formatAmount(player.contribution)}`
+      : `in ${formatAmount(player.contribution)}`;
+    const hole = match.revealed && player.hole ? ` — ${cardsText(player.hole)}` : "";
+    lines.push(`${player.allIn ? "🚨" : "👤"} ${nameOf(names, player.userId)} — ${stack}${hole}`);
   }
-  lines.push(boardLine(match.board));
+  const out = seated.filter((player) => player.folded);
+  if (out.length > 0) {
+    lines.push("", "Out");
+    for (const player of out) {
+      lines.push(`✖ ${nameOf(names, player.userId)} — in ${formatAmount(player.contribution)}`);
+    }
+  }
+  return lines;
+}
+
+function nextLine(match: MatchState, names: Map<number, string>): string | null {
+  if (match.status === "done") {
+    return "⏭ Hand over — result below";
+  }
+  if (match.runout) {
+    return "⏭ Next: running out the board…";
+  }
+  if (match.actorUserId === null) {
+    return null;
+  }
+  const actor = match.players.find((player) => player.userId === match.actorUserId);
+  if (!actor) {
+    return null;
+  }
+  const call = Math.max(0, match.currentBet - actor.streetContribution);
+  const action = call > 0 ? `call ${formatAmount(call)}` : "check";
+  return `⏭ Next: ${nameOf(names, actor.userId)} — ${action} · ${TURN_SECONDS}s to act`;
+}
+
+export function activityText(view: ActivityView): string {
+  const lines = [`<b>${headline(view)}</b>`, "", ...stateLines(view.match, view.names)];
+  const next = nextLine(view.match, view.names);
+  if (next !== null) {
+    lines.push("", next);
+  }
   return lines.join("\n");
 }
 
@@ -178,17 +279,27 @@ export function resultText(
   names: Map<number, string>,
   shown: Map<number, [Card, Card]>,
 ): string {
-  const winners = match.winners.map((id) => nameOf(names, id)).join(", ");
-  const lines = [
-    `🏆 <b>${winners} ${match.winners.length === 1 ? "wins" : "split"} ${formatAmount(match.pot)}</b>`,
-  ];
+  const winnerNames = match.winners.map((id) => nameOf(names, id));
+  let line: string;
+  if (match.winners.length > 1) {
+    line = `🏆 <b>${winnerNames.join(", ")} split ${formatAmount(match.pot)}</b>`;
+  } else {
+    const delta = match.winners[0] === undefined ? 0 : (match.deltas[match.winners[0]] ?? 0);
+    line = `🏆 <b>${winnerNames[0] ?? "—"} wins ${formatAmount(match.pot)} (${
+      delta >= 0 ? "+" : ""
+    }${formatAmount(delta)})</b>`;
+  }
   const winnerCards = match.winners
     .map((id) => match.players.find((player) => player.userId === id)?.hole)
     .filter((hole): hole is [Card, Card] => hole !== undefined);
   if (winnerCards.length > 0) {
-    lines[0] += ` — ${winnerCards.map((hole) => cardsText(hole)).join(" / ")}`;
+    line += ` — ${winnerCards.map((hole) => cardsText(hole)).join(" / ")}`;
   }
-  lines.push(boardLine(match.board));
+  const lines = [line];
+  const board = boardText(match.board);
+  if (board) {
+    lines.push(board);
+  }
   for (const [userId, hole] of shown) {
     lines.push(`👁 ${nameOf(names, userId)} shows ${cardsText(hole)}`);
   }

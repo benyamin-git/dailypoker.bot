@@ -27,7 +27,7 @@ import {
 import type { Action, Card, EngineResult, MatchState, PlayerState, Street } from "../engine/types";
 import type { AppConfig, Bindings } from "../env";
 import { getConfig } from "../env";
-import { type InlineKeyboardMarkup, TelegramApi } from "../telegram/api";
+import { TelegramApi } from "../telegram/api";
 import {
   chatIdOf,
   classifyUpdate,
@@ -73,7 +73,6 @@ interface TableState {
   lobby: LobbyState | null;
   match: MatchState | null;
   actionLog: LogAction[];
-  tableMessageId: number | null;
   resultMessageId: number | null;
   turnDeadlineAt: number | null;
   runoutDeadlineAt: number | null;
@@ -87,7 +86,6 @@ function emptyState(): TableState {
     lobby: null,
     match: null,
     actionLog: [],
-    tableMessageId: null,
     resultMessageId: null,
     turnDeadlineAt: null,
     runoutDeadlineAt: null,
@@ -113,6 +111,7 @@ type ChatMemberIntent = Extract<Intent, { kind: "chat_member" }>;
 interface ActionContext {
   source: "command" | "callback" | "dm";
   callbackId?: string;
+  messageId?: number;
   matchId?: number;
   turnId?: number;
 }
@@ -469,6 +468,7 @@ export class TableDO extends DurableObject<Bindings> {
     const context: ActionContext = {
       source: "callback",
       callbackId: intent.callbackId,
+      messageId: intent.messageId,
       matchId: data.matchId,
       turnId: data.turnId,
     };
@@ -542,15 +542,25 @@ export class TableDO extends DurableObject<Bindings> {
             });
             return;
           }
-          if (this.state.tableMessageId !== null) {
-            this.editTableMessage(
-              Date.now(),
-              raiseKeyboard({
-                matchId: match.matchId,
-                turnId: match.turnId,
-                options: raiseOptions(match, player),
-              }),
-            );
+          if (context.messageId !== undefined) {
+            try {
+              await this.api.editMessageReplyMarkup(
+                this.groupId,
+                context.messageId,
+                raiseKeyboard({
+                  matchId: match.matchId,
+                  turnId: match.turnId,
+                  options: raiseOptions(match, player),
+                }),
+              );
+            } catch (error) {
+              console.error(
+                JSON.stringify({
+                  event: "raise_keyboard_failed",
+                  error: safeErrorMessage(error),
+                }),
+              );
+            }
           }
           await this.api.answerCallbackQuery(intent.callbackId, {
             text: "Pick an amount or type /raise <amount>.",
@@ -695,7 +705,6 @@ export class TableDO extends DurableObject<Bindings> {
     const message = await this.api.sendMessage(this.groupId, text, { reply_markup: keyboard });
     if (message) {
       lobby.messageId = message.message_id;
-      this.state.tableMessageId = message.message_id;
       try {
         await this.api.pinChatMessage(this.groupId, message.message_id);
       } catch (error) {
@@ -856,7 +865,6 @@ export class TableDO extends DurableObject<Bindings> {
     }
 
     this.state.lobby = null;
-    this.state.tableMessageId = lobby.messageId;
     this.state.actionLog = [];
     this.state.effectsSent = false;
     this.state.resultMessageId = null;
@@ -880,8 +888,21 @@ export class TableDO extends DurableObject<Bindings> {
     this.state.match = state;
     this.resetDeadlines(state, now);
     this.persist();
-    this.editTableMessage(now);
+    if (lobby.messageId !== null) {
+      this.api.queueEdit(
+        this.groupId,
+        lobby.messageId,
+        messages.lobbyStartedText(state.handNo),
+        {},
+      );
+      try {
+        await this.api.unpinChatMessage(this.groupId, lobby.messageId);
+      } catch (error) {
+        console.error(JSON.stringify({ event: "unpin_failed", error: safeErrorMessage(error) }));
+      }
+    }
     await this.api.flushEdits();
+    await this.postActivity({ type: "start" });
   }
 
   private async cancelLobby(user: TelegramUser, context: ActionContext): Promise<void> {
@@ -981,10 +1002,40 @@ export class TableDO extends DurableObject<Bindings> {
     });
   }
 
-  private async completeActionEvents(state: MatchState, now: number): Promise<boolean> {
+  private async postActivity(activity: messages.TableActivity): Promise<void> {
+    const match = this.state.match;
+    if (!match) {
+      return;
+    }
+    const names = this.namesFor(match.players.map((player) => player.userId));
+    const actor = match.actorUserId === null ? null : playerById(match, match.actorUserId);
+    const text = messages.activityText({ match, names, activity });
+    const keyboard = tableKeyboard({
+      matchId: match.matchId,
+      turnId: match.turnId,
+      state: match,
+      actor,
+    });
+    await this.api.sendMessage(this.groupId, text, { reply_markup: keyboard });
+  }
+
+  private async completeActionEvents(
+    state: MatchState,
+    now: number,
+    activity: messages.TableActivity | null,
+  ): Promise<boolean> {
     this.state.match = state;
     this.resetDeadlines(state, now);
     if (state.status === "done") {
+      if (activity !== null) {
+        try {
+          await this.postActivity(activity);
+        } catch (error) {
+          console.error(
+            JSON.stringify({ event: "activity_failed", error: safeErrorMessage(error) }),
+          );
+        }
+      }
       await this.finishHand(now);
       return true;
     }
@@ -997,7 +1048,9 @@ export class TableDO extends DurableObject<Bindings> {
       }
     }
     this.persist();
-    this.editTableMessage(now);
+    if (activity !== null) {
+      await this.postActivity(activity);
+    }
     return false;
   }
 
@@ -1051,7 +1104,15 @@ export class TableDO extends DurableObject<Bindings> {
     if (context.source === "callback" && context.callbackId) {
       await this.api.answerCallbackQuery(context.callbackId);
     }
-    await this.completeActionEvents(result.state, now);
+    const added = after.contribution - player.contribution;
+    const to =
+      action.kind === "allin" ? after.contribution : action.kind === "call" ? added : action.to;
+    await this.completeActionEvents(result.state, now, {
+      type: "action",
+      userId,
+      kind: action.kind,
+      to: to ?? null,
+    });
   }
 
   private async applyTimeout(now: number): Promise<void> {
@@ -1072,7 +1133,11 @@ export class TableDO extends DurableObject<Bindings> {
     ) as PlayerState;
     store.adjustBalance(this.sql, actor.userId, -(after.contribution - actor.contribution));
     this.recordAction(actor.userId, match.street, timedOutKind, null, now);
-    await this.completeActionEvents(result.state, now);
+    await this.completeActionEvents(result.state, now, {
+      type: "timeout",
+      userId: actor.userId,
+      kind: timedOutKind,
+    });
   }
 
   private async runoutStep(now: number): Promise<void> {
@@ -1082,7 +1147,12 @@ export class TableDO extends DurableObject<Bindings> {
       return;
     }
     const result = advanceRunout(match);
-    await this.completeActionEvents(result.state, now);
+    const dealt = result.events.find((event) => event.type === "street_dealt");
+    const activity: messages.TableActivity | null =
+      dealt?.type === "street_dealt"
+        ? { type: "street", street: dealt.street, cards: dealt.cards }
+        : null;
+    await this.completeActionEvents(result.state, now, activity);
   }
 
   private async finishHand(now: number): Promise<void> {
@@ -1114,8 +1184,6 @@ export class TableDO extends DurableObject<Bindings> {
     this.state.turnDeadlineAt = null;
     this.state.runoutDeadlineAt = null;
     this.persist();
-    this.editTableMessage(now);
-    await this.api.flushEdits();
 
     const text = messages.resultText(match, names, new Map());
     const message = await this.api.sendMessage(this.groupId, text, {
@@ -1159,31 +1227,6 @@ export class TableDO extends DurableObject<Bindings> {
       actions: this.state.actionLog,
       result: { winners: match.winners, pot: match.pot, deltas: match.deltas },
     };
-  }
-
-  private editTableMessage(now: number, keyboardOverride?: InlineKeyboardMarkup): void {
-    const match = this.state.match;
-    if (!match || this.state.tableMessageId === null) {
-      return;
-    }
-    const names = this.namesFor(match.players.map((player) => player.userId));
-    const actor = match.actorUserId === null ? null : playerById(match, match.actorUserId);
-    const secondsLeft =
-      actor !== null && this.state.turnDeadlineAt !== null
-        ? Math.max(0, Math.ceil((this.state.turnDeadlineAt - now) / 1000))
-        : null;
-    const text = messages.tableText({ match, names, secondsLeft });
-    const keyboard =
-      keyboardOverride ??
-      tableKeyboard({
-        matchId: match.matchId,
-        turnId: match.turnId,
-        state: match,
-        actor,
-      });
-    this.api.queueEdit(this.groupId, this.state.tableMessageId, text, {
-      reply_markup: keyboard,
-    });
   }
 
   private async showHand(userId: number, callbackId?: string): Promise<void> {

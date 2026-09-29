@@ -87,6 +87,7 @@ interface PendingEdit {
 }
 
 const MAX_RETRY_WAIT_MS = 30_000;
+const MAX_RATE_LIMIT_RETRIES = 2;
 
 export class TelegramApi {
   private sendsThisUpdate = 0;
@@ -116,7 +117,7 @@ export class TelegramApi {
         return data.result;
       }
       const retryAfterMs = (data.parameters?.retry_after ?? 0) * 1000;
-      if (data.error_code === 429 && attempt === 0) {
+      if (data.error_code === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
         await sleep(Math.min(retryAfterMs || 1000, MAX_RETRY_WAIT_MS));
         continue;
       }
@@ -178,6 +179,18 @@ export class TelegramApi {
     options: AnswerCallbackOptions = {},
   ): Promise<void> {
     await this.call("answerCallbackQuery", { callback_query_id: callbackId, ...options });
+  }
+
+  async editMessageReplyMarkup(
+    chatId: number,
+    messageId: number,
+    replyMarkup: InlineKeyboardMarkup,
+  ): Promise<void> {
+    await this.call("editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: replyMarkup,
+    });
   }
 
   async sendDice(chatId: number, emoji = "🎲"): Promise<TelegramMessage | null> {

@@ -9,6 +9,7 @@ import {
   getTableState,
   installMockTelegram,
   lastEditText,
+  lastGroupText,
   messageUpdate,
   postUpdate,
   runAlarm,
@@ -67,6 +68,10 @@ function answerTexts(calls: TelegramCall[]): string[] {
     .map((call) => String(call.payload.text ?? ""));
 }
 
+function groupTexts(calls: TelegramCall[]): string[] {
+  return sentMessages(calls, GROUP_ID).map((call) => String(call.payload.text ?? ""));
+}
+
 beforeEach(async () => {
   await cleanStorage();
   setDefaultMinEditInterval(0);
@@ -94,11 +99,28 @@ describe("lobby lifecycle", () => {
     const snapshot = await getTableState();
     expect(snapshot.lobby).toBeNull();
     expect(snapshot.match?.status).toBe("active");
+    const dealText = lastGroupText(calls);
+    expect(dealText).toContain("acts first");
+    expect(dealText).toContain("Next:");
+    expect(calls.some((call) => call.method === "unpinChatMessage")).toBe(true);
     const dms = sentMessages(calls).filter((call) => call.payload.chat_id !== GROUP_ID);
     expect(dms).toHaveLength(2);
     for (const dm of dms) {
       expect(String(dm.payload.text)).toContain("Your hand");
     }
+  });
+
+  it("opens a new lobby after a finished hand", async () => {
+    await startTwoPlayerHand();
+    await tap((await getTableState()).match?.actorUserId as number, "fold");
+    const done = await getTableState();
+    expect(done.match?.status).toBe("done");
+
+    await postUpdate(messageUpdate(nextUpdateId(), GROUP_ID, P2, "/newmatch"));
+    const snapshot = await getTableState();
+    expect(snapshot.match).toBeNull();
+    expect(snapshot.lobby).not.toBeNull();
+    expect(snapshot.lobby?.starterId).toBe(P2);
   });
 
   it("rejects deal with fewer than two players by editing the lobby", async () => {
@@ -266,6 +288,21 @@ describe("betting validation", () => {
     await tap(snapshot.match?.actorUserId as number, "raise", { amount: 1000 });
     expect(answerTexts(calls).some((text) => text.includes("at most"))).toBe(true);
   });
+
+  it("opens the raise options on the message that was tapped", async () => {
+    const calls = await startTwoPlayerHand();
+    calls.length = 0;
+    const snapshot = await getTableState();
+    await tap(snapshot.match?.actorUserId as number, "raise", {
+      matchId: snapshot.match?.matchId,
+      turnId: snapshot.match?.turnId,
+    });
+    const markup = calls.find((call) => call.method === "editMessageReplyMarkup");
+    expect(markup).toBeDefined();
+    expect(markup?.payload.message_id).toBe(1);
+    expect(JSON.stringify(markup?.payload.reply_markup)).toContain("Bet 10");
+    expect(calls.some((call) => call.method === "sendMessage")).toBe(false);
+  });
 });
 
 describe("turn timeouts", () => {
@@ -278,7 +315,51 @@ describe("turn timeouts", () => {
     expect(ran).toBe(true);
     const after = await getTableState();
     expect(after.match?.actorUserId).not.toBe(before.match?.actorUserId);
-    expect(calls.some((call) => call.method === "editMessageText")).toBe(true);
+    const texts = groupTexts(calls);
+    expect(texts.some((text) => text.includes("timed out"))).toBe(true);
+    expect(texts.some((text) => text.includes("Next:"))).toBe(true);
+  });
+});
+
+describe("play by play", () => {
+  it("posts a new message for every action with the next actor", async () => {
+    const calls = await startTwoPlayerHand();
+    calls.length = 0;
+    const snapshot = await getTableState();
+    await tap(snapshot.match?.actorUserId as number, "check");
+    const texts = groupTexts(calls);
+    expect(texts).toHaveLength(1);
+    const text = texts[0] as string;
+    expect(text).toContain("checks");
+    expect(text).toContain("Still in");
+    expect(text).toContain("💰 Pot");
+    expect(text).toContain("⏭ Next:");
+    expect(text).toContain("60s to act");
+    expect(calls.some((call) => call.method === "editMessageText")).toBe(false);
+    expect(calls.some((call) => call.method === "sendMessage")).toBe(true);
+  });
+
+  it("announces the winner and net result in a separate message", async () => {
+    const calls = await startTwoPlayerHand();
+    for (let i = 0; i < 8; i++) {
+      const snapshot = await getTableState();
+      if (snapshot.match?.status !== "active") {
+        break;
+      }
+      const actor = snapshot.match.actorUserId as number;
+      await tap(actor, "check");
+    }
+    const done = await getTableState();
+    const texts = groupTexts(calls);
+    const result = texts.find((text) => text.includes("🏆"));
+    expect(result).toBeDefined();
+    const split = (done.match?.winners.length ?? 1) > 1;
+    expect(result).toContain(split ? "split" : "wins");
+    if (!split) {
+      expect(result).toMatch(/\(\+?\d/);
+    }
+    const last = texts[texts.length - 1];
+    expect(last).toBe(result);
   });
 });
 
@@ -301,7 +382,8 @@ describe("full hands", () => {
     const b1 = await getBalance(P1);
     const b2 = await getBalance(P2);
     expect(b1 + b2).toBe(400);
-    expect([b1, b2].sort()).toEqual([190, 210]);
+    const split = (snapshot.match?.winners.length ?? 1) > 1;
+    expect([b1, b2].sort()).toEqual(split ? [200, 200] : [190, 210]);
   });
 
   it("completes a nine-player all-in with a full runout and effects", async () => {
@@ -338,6 +420,10 @@ describe("full hands", () => {
     expect(calls.some((call) => call.method === "sendDice" && call.payload.emoji === "🎲")).toBe(
       true,
     );
+    const texts = groupTexts(calls);
+    expect(texts.some((text) => text.includes("🎲 Flop:"))).toBe(true);
+    expect(texts.some((text) => text.includes("🎲 Turn:"))).toBe(true);
+    expect(texts.some((text) => text.includes("🎲 River:"))).toBe(true);
     const result = sentMessages(calls, GROUP_ID).find((call) =>
       String(call.payload.text).includes("🏆"),
     );

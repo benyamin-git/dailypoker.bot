@@ -1,8 +1,8 @@
 # 00 — Overview
 
 **Project:** `dailypoker.bot`
-**Status:** Implementation in progress (M0 code complete 2026-09-28; deploy steps pending owner).
-Planning completed 2026-09-28.
+**Status:** M0–M4 code complete (2026-09-29); dev environment deployed and live; first live
+hand + `v0.1.0` tag pending owner. Planning completed 2026-09-28.
 **One-liner:** A social-first poker bot for private friend groups that lives entirely inside a
 Telegram group chat and runs on the Cloudflare Workers free tier.
 
@@ -41,7 +41,8 @@ learn a complex interface.
 
 1. **Group chat is the table; private info goes to DM.** Hole cards and personal stats in DM;
    everything else in the group.
-2. **One message lifecycle:** Lobby → Table → Result, edited in place and pinned.
+2. **Play-by-play messages:** the lobby is one edited, pinned message; every in-hand action
+   posts a fresh message (nothing is pinned during a hand); the result is a fresh message.
 3. **Pure engine, no I/O.** Deterministic with injected randomness; all Telegram and database
    work happens outside it.
 4. **Uniform effective stacks by construction.** Join requires ≥100 chips and the cap is 100

@@ -123,7 +123,7 @@ and proxy Telegram webhook management calls (never exposed to groups).
 - `telegram/api.ts` owns: HTML escaping, 429 handling (`retry_after`), edit coalescing
   (min 1s between edits of the same message; coalesce queued edits), and a hard cap on
   sends per update.
-- Message IDs and the pinned table message id are stored in match state.
+- Message IDs (lobby, result) are stored in table state.
 - `setMyCommands` scopes: `all_group_chats` (group commands) and `all_private_chats` (DM
   commands). Run once via an admin route during M0.
 - HTML mode; every interpolated name passes through `escapeHtml()`.
@@ -135,7 +135,7 @@ and proxy Telegram webhook management calls (never exposed to groups).
 
 | Failure | Behavior |
 |---|---|
-| Telegram API 429 | Wait `retry_after` (cap ~30s), retry once, then drop the send (state already persisted; the next action re-edits the table message) |
+| Telegram API 429 | Wait `retry_after` (cap ~30s), retry up to twice, then drop the send (state already persisted; the next action posts a fresh message) |
 | Telegram API 4xx (bad request) | Log redacted, don't retry; alert the owner at most once per hour |
 | DO SQLite error | Surface 500 to the Worker → Telegram retries; dedupe makes it idempotent |
 | Alarm lost/late | On any next wake, compare deadline vs now; if past, apply the timeout action immediately |

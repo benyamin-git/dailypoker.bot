@@ -93,13 +93,13 @@ planning session. Do not silently change any of them; propose amendments instead
 | # | Decision | Details |
 |---|---|---|
 | U1 | Group chat is the table; hole cards + personal stats via DM | Social-first |
-| U2 | One pinned message lives Lobby → Table → Result (edited in place) | Clarity; avoids spam |
+| U2 | **Play-by-play**: every action posts a fresh group message (action → state → next actor); nothing is pinned during a hand | At-a-glance readability; avoids stale pinned state |
 | U3 | Inline buttons primary; commands (`/fold`, `/raise 40`) as fallback | Buttons are invisible to others; commands are visible banter |
 | U4 | Typed command messages **stay visible** in the chat | Social |
 | U5 | No turn pings (DMs only send cards + stats replies) | Owner choice |
 | U6 | Join onboarding: **auto deep-link flow** — pressing Join without `/start` yields a private alert; a `Start the bot` deep-link button auto-joins them on `/start` | Zero-friction onboarding |
 | U7 | Built-in animated effects (Telegram dice/emoji) at dramatic moments (all-in runouts, big pots); no external assets | Fun + open-source safe |
-| U8 | Bot admin rights: **pin + delete messages only** | Least privilege; pin for the table message |
+| U8 | Bot admin rights: **pin + delete messages only** | Least privilege; pin used for the lobby message only |
 | U9 | Winner result is posted as a fresh short group message with `Show my hand` and `Rematch` buttons | Visibility + quick rematch |
 
 ## Repo & delivery

@@ -220,6 +220,12 @@ export function edits(calls: TelegramCall[]): TelegramCall[] {
   return calls.filter((call) => call.method === "editMessageText");
 }
 
+export function lastGroupText(calls: TelegramCall[], chatId: number = GROUP_ID): string {
+  const list = sentMessages(calls, chatId);
+  const last = list[list.length - 1];
+  return last === undefined ? "" : String(last.payload.text);
+}
+
 export function lastEditText(calls: TelegramCall[]): string {
   const list = edits(calls);
   const last = list[list.length - 1];

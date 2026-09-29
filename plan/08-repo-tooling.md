@@ -171,7 +171,7 @@ EFFECTS_ENABLED=true
 
 ## 8. README outline (public)
 
-1. What it is + one screenshot/mock of the table message.
+1. What it is + one mock of the play-by-play messages.
 2. The ruleset (summary table + link to `plan/03-game-rules.md`).
 3. Quick start for self-hosters: BotFather bot, Cloudflare account, secrets, deploy,
    webhook registration, allowlist, group admin rights.

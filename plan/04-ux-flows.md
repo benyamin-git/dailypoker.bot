@@ -78,75 +78,114 @@ Get chips with /daily (once per day, +200).
 - Too early: `⏳ Already claimed. Next claim in 6h 12m.`
 - Group teaser: `🎁 <name> claimed their daily chips.` (single line, no reply chain)
 
-## 4. Lobby → Table → Result (the one pinned message)
+## 4. Lobby → Hand (play-by-play messages) → Result
 
-### Lobby state
+### Lobby state (one edited, pinned message)
 
 ```
 🃏 Daily Poker — Lobby
-Ante 10 · Cap 100 · 2–9 players
+Ante 10 each · max 100 per hand · 2–9 players
 
-Starter: Ali
+Can deal: Ali
 Joined (3): Ali, Reza, Sara
-Waiting for more players…
+Ready to deal.
 
 [ Join ] [ Leave ]
-[ 🚀 Deal ] [ Cancel ]          ← Deal/Cancel visible to the starter only
+[ 🚀 Deal ] [ Cancel ]          ← validated server-side against the starter
 [ 📬 Open bot ]                 ← deep link for onboarding
 ```
 
 - `Join`/`Leave` are validated per user with private alerts.
-- Live `Joined` list updates on every join/leave.
-- If the starter leaves before Deal, `[ Take over ]` is shown to the remaining players;
-  the first tap makes that player the starter (Deal/Cancel move to them).
+- Live `Joined` list updates on every join/leave; no new lobby messages are posted.
+- If the starter leaves before Deal, `[ Take over ]` is shown; the first tap makes that player
+  the starter (Deal/Cancel move to them).
 - On expiry (15 min no new join): `⌛ Lobby expired. Start a new match with /newmatch.`
+- On Deal the lobby message is edited to `✅ Hand #7 started — updates below.` and unpinned.
 
-### Table state (after Deal)
+### Hand messages (one new message per action)
+
+Every action posts a fresh group message; older ones stay in the chat as the play-by-play. The
+action is the bold headline, the table state follows, and the footer says who is next. Buttons
+(Fold/Check/Call/Raise ▾/🂠 Cards) are attached to every message; the bot validates the actor
+per callback (`It's Reza's turn` / `You're not in this match` / `That move is no longer
+available`).
+
+**Deal**
 
 ```
-🃏 Daily Poker — Hand #7
-Ante 10 · Pot 180 · Cap 100
+🚀 Hand #7 — Reza acts first
 
-🎯 Reza   room 60 · to call 60      ⏳ 52s
-👤 Ali    room 60 · to call 60
-👤 Sara   ALL-IN (100)
+🃏 Hand #7 — Preflop · 💰 Pot 30 (30 ante) · cap 100
 
-Board: A♠ K♦ 7♣ — —
+Still in
+👤 Ali — in 10
+👤 Reza — in 10
+👤 Sara — in 10
 
-[ Fold ] [ Call 60 ] [ Raise ▾ ] [ 🂠 Cards ]
+⏭ Next: Reza — check · 60s to act
 ```
 
-- The **same message** is edited in place; it stays pinned.
-- Buttons are the same for everyone (Telegram limitation). The bot validates the actor:
-  non-actors get a private alert (`It's Reza's turn` / `You're not in this match`).
-- `Call` becomes `Check` when `to call = 0`.
-- `Raise ▾` opens a second keyboard level:
-  `[ Min — to 60 ] [ +20 — to 80 ] [ All-in — 100 ] [ ✏️ Custom ]`
-  - `Custom` alert: `Type /raise <amount> (multiples of 10).`
+**Action headlines**
+
+| Action | Headline |
+|---|---|
+| fold | `❌ Sara folds` |
+| check | `✅ Ali checks` |
+| call | `📞 Ali calls 40` |
+| bet | `🔥 Ali bets 40` |
+| raise | `🔥 Reza raises to 80` |
+| all-in | `🚨 Sara is all-in — 100` |
+| timeout | `⏰ Reza timed out — checked` / `— folded` |
+
+**Body and footer**
+
+```
+🃏 Hand #7 — Flop · 💰 Pot 90 (30 ante + 60 bets) · cap 100
+Board: A♠ K♦ 7♣ — —          ← board line omitted before the flop
+
+Still in
+👤 Ali — in 20
+👤 Reza — in 60
+
+Out
+✖ Sara — in 10
+
+⏭ Next: Ali — call 40 · 60s to act
+```
+
+- `in N` is the player's total committed this hand (ante included); the numbers sum to the pot.
+- All-in players show `all-in 100`; folded players move under `Out` (section omitted when
+  nobody folded); live hands appear next to names once revealed.
+- The footer states the 60 s limit, not a live countdown: the timeout auto-action posts its own
+  message.
+- `Call` becomes `Check` when `to call = 0`. `Raise ▾` edits only the keyboard of the message
+  it was pressed on (`[ Min — to 60 ] [ +20 — to 80 ] [ All-in — 100 ] [ ✏️ Custom ]`;
+  `Custom` alerts `Type /raise <amount> (multiples of 10).`). Picking an amount posts the new
+  action message.
 - `🂠 Cards` shows the player's hole cards in a **private alert** (also available via `/cards` DM).
-- Timeout approaching: the ⏳ counter updates roughly every edit; no extra messages.
-- Street change: board line fills in; action indicator resets.
 
 ### All-in runout
 
-If every remaining player is at the cap:
+When every remaining player is all-in:
 - a single animated `🎲` dice message is sent (if `EFFECTS_ENABLED`),
-- streets are dealt with a short delay (~2s between board lines, edits to the table message),
-- **all live hands are revealed** on the table message as they are tabled.
+- the action message footer says `⏭ Next: running out the board…`,
+- each street posts its own message (`🎲 Flop: A♠ K♦ 7♣`, `🎲 Turn: 4♥`, `🎲 River: 2♠`) with
+  a ~2 s delay and **all live hands revealed** next to the player names.
 
-### Result
+### Result (separate message)
 
-Table message final state, plus a fresh short message (not pinned):
+The final action message says `⏭ Hand over — result below`; the result is a fresh message
+(not pinned):
 
 ```
-🏆 Reza wins 300 — A♠ A♦
+🏆 Reza wins 210 (+120) — A♠ A♦
 Board: A♠ K♦ 7♣ 4♥ 2♠
 
 [ Show my hand ]   [ 🔁 Rematch ]
 ```
 
-- `Show my hand` visible to mucked losers; pressing it reveals their cards in the result
-  message (private alert if not applicable).
+- `Show my hand` reveals a mucked loser's cards by editing the result message (private alert
+  if not applicable).
 - `Rematch` opens a new lobby with the same players pre-invited (they still must tap Join).
 - `Effects`: `🎰` for pots ≥ 200 on top of the result (if enabled).
 
@@ -161,7 +200,7 @@ A♠ K♥
 Board and betting happen in the group.
 ```
 
-**Turn reminder**: none (owner decision U5). Players watch the pinned table message.
+**Turn reminder**: none (owner decision U5). Players follow the latest action message.
 
 **`/cards`**: re-sends the above (private alert with the cards as a fallback for speed).
 
@@ -221,15 +260,18 @@ Best hand: Full house, Aces over Kings
 - Parse mode HTML; escape `<`, `>`, `&` in all user-controlled strings (names, usernames).
 - Cards: `A♠ K♥ Q♦ J♣ 10♠` (rank + suit). Hidden card: `🂠`.
 - Amounts: `1,240` with thousands separators + the word `chips` where space allows.
-- Table body uses `<pre>` for the board/status block to keep alignment; button labels stay short.
-- Emoji vocabulary (fixed): 🃏 table, 🎯 current actor, 👤 seated, 🏆 win, 💔 loss, 🎁 daily,
-  🂠 cards, 🔁 rematch, 🚀 deal, 📬 DM link, 🎲/🎰 effects.
+- Action headline is the first line, bold; the state block lines follow without `<pre>`; button
+  labels stay short.
+- Emoji vocabulary (fixed): 🃏 table, 👤 seated, 🚨 all-in, ✖ folded, 🏆 win, 💔 loss, 🎁 daily,
+  🂠 cards, 🔁 rematch, 🚀 deal, 🎲/🎰 effects, ❌ fold, ✅ check, 📞 call, 🔥 bet/raise,
+  ⏰ timeout, ⏭ next, 👁 show, 📬 DM link.
 - No MarkdownV2; no external images or sticker files in v1.
 
 ## 8. UX defaults (veto anytime)
 
 1. `/balance` used in the group replies publicly in the group; in DM it replies privately.
-2. Result messages are not pinned; only the table message is pinned.
+2. Result messages are not pinned. During a hand nothing is pinned: the lobby message is
+   unpinned and edited to `✅ Hand #N started — updates below.` when the hand starts.
 3. Rematch pre-invites previous players via a URL button but they must tap Join again.
 4. Lobby expiry = 15 minutes without a new join.
 5. Effects only on all-in runouts and pots ≥ 200; disabled entirely via `EFFECTS_ENABLED=false`.

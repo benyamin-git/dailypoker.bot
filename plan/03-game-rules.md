@@ -99,7 +99,7 @@ Streets: **preflop → flop → turn → river → showdown**.
   Example: pot 100 (dead money from a folder), three-way tie → 34/33/33.
 - Result message (fresh, short): winner, pot, winning cards, board; buttons `Show my hand`
   (losers) and `Rematch`.
-- The table message is updated to its final state.
+- The final action message's footer reads `⏭ Hand over — result below`.
 - Stats + history are persisted at hand end (see `06-data-model.md`).
 
 ## 8. Invariants: no side pots; called all-ins end betting (proofs)

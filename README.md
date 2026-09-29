@@ -7,17 +7,26 @@ transfers, no real-money stakes.
 Runs 100% on the Cloudflare Workers free plan (Worker + one SQLite-backed Durable Object per
 group). No servers, no tunnels, no web UI for players.
 
+Every action gets its own group message: the action is the headline, the table state follows,
+and the last line says who is next.
+
 ```
-🃏  Daily Poker — Hand #12
-👥 5 players · 🪙 pot 240
+🔥 Reza raises to 40
 
-🟢 Ali (560)
-   ⏳ to act
-⚪ Reza (490) — called 40
-   ...
-🔴 Sara (410) — folded
+🃏 Hand #12 — Flop · 💰 Pot 210 (40 ante + 170 bets) · cap 100
+Board: A♠ K♦ 7♣ — —
 
-[Check] [Bet 40] [Fold] [Raise ▸] [🂠 Cards]
+Still in
+👤 Ali — in 40
+👤 Reza — in 60
+🚨 Sara — all-in 100 — Q♠ Q♦
+
+Out
+✖ Babak — in 10
+
+⏭ Next: Ali — call 20 · 60s to act
+
+[ Fold ] [ Call 20 ] [ Raise ▾ ] [ 🂠 Cards ]
 ```
 
 > The mocks in this README are text stand-ins for the real Telegram messages.
@@ -30,8 +39,8 @@ Hold'em with fixed blinds, a short clock, and simplification-first choices:
 | Rule | v1 |
 |---|---|
 | Table size | 2–9 players |
-| Stacks | 1,000 chips each; balance is escrowed per hand |
-| Blinds | 10 / 20, fixed (no increases) |
+| Stacks | 100 max in per hand (the ante counts toward it); balances adjust by hand result |
+| Ante | 10 each, posted at the deal (no blinds) |
 | Buy-in | one hand at a time; rejoin next hand |
 | Turn timer | 60 seconds, then auto check/fold |
 | Raise rule | min-raise increments, bet sizes are multiples of 10 |
@@ -48,7 +57,7 @@ Group:
 
 | Command | Who | What |
 |---|---|---|
-| `/newmatch` | anyone | open the lobby, pin the table message |
+| `/newmatch` | anyone | open the lobby (pinned until the deal) |
 | `/join`, `/leave` | anyone | enter/exit the lobby |
 | `/deal`, `/cancel` | starter | start the hand / cancel the lobby |
 | `/top` | anyone | group leaderboard |
@@ -143,7 +152,9 @@ curl -sS "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/web
 
 1. Add the bot to the group (it must be allowlisted, else it replies once and goes silent).
 2. `/newmatch` → everyone taps **Join** → starter taps **Deal**.
-3. Bets, calls, raises and folds happen on the pinned message; hole cards arrive in DM.
+3. Every check, call, bet, raise, fold and timeout posts a fresh message with the action on
+   top and whose turn it is at the bottom; hole cards arrive in DM. The lobby message is
+   unpinned once the hand starts.
 4. After the hand, the result message offers **Show** and **Rematch**.
 
 </details>
