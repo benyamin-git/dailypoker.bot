@@ -200,19 +200,4 @@ export class TelegramApi {
     }
     return this.call<TelegramMessage>("sendDice", { chat_id: chatId, emoji });
   }
-
-  async pinChatMessage(chatId: number, messageId: number): Promise<void> {
-    await this.call("pinChatMessage", {
-      chat_id: chatId,
-      message_id: messageId,
-      disable_notification: true,
-    });
-  }
-
-  async unpinChatMessage(chatId: number, messageId?: number): Promise<void> {
-    await this.call("unpinChatMessage", {
-      chat_id: chatId,
-      ...(messageId === undefined ? {} : { message_id: messageId }),
-    });
-  }
 }

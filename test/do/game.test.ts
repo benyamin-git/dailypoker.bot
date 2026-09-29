@@ -83,14 +83,14 @@ afterEach(() => {
 });
 
 describe("lobby lifecycle", () => {
-  it("opens a pinned lobby, accepts joins and deals a hand", async () => {
+  it("opens a lobby, accepts joins and deals a hand", async () => {
     await seedPlayers(2);
     const calls = installMockTelegram();
     await postUpdate(messageUpdate(nextUpdateId(), GROUP_ID, P1, "/newmatch"));
     const lobbySends = sentMessages(calls, GROUP_ID);
     expect(lobbySends).toHaveLength(1);
     expect(String(lobbySends[0]?.payload.text)).toContain("Lobby");
-    expect(calls.some((call) => call.method === "pinChatMessage")).toBe(true);
+    expect(calls.some((call) => call.method === "pinChatMessage")).toBe(false);
 
     await postUpdate(messageUpdate(nextUpdateId(), GROUP_ID, P2, "/join"));
     expect(lastEditText(calls)).toContain("Joined (2)");
@@ -102,7 +102,7 @@ describe("lobby lifecycle", () => {
     const dealText = lastGroupText(calls);
     expect(dealText).toContain("acts first");
     expect(dealText).toContain("Next:");
-    expect(calls.some((call) => call.method === "unpinChatMessage")).toBe(true);
+    expect(calls.some((call) => call.method === "unpinChatMessage")).toBe(false);
     const dms = sentMessages(calls).filter((call) => call.payload.chat_id !== GROUP_ID);
     expect(dms).toHaveLength(2);
     for (const dm of dms) {

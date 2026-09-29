@@ -748,11 +748,6 @@ export class TableDO extends DurableObject<Bindings> {
     const message = await this.api.sendMessage(this.groupId, text, { reply_markup: keyboard });
     if (message) {
       lobby.messageId = message.message_id;
-      try {
-        await this.api.pinChatMessage(this.groupId, message.message_id);
-      } catch (error) {
-        console.error(JSON.stringify({ event: "pin_failed", error: safeErrorMessage(error) }));
-      }
     }
     this.persist();
   }
@@ -941,11 +936,6 @@ export class TableDO extends DurableObject<Bindings> {
         this.msg.lobbyStartedText(state.handNo),
         {},
       );
-      try {
-        await this.api.unpinChatMessage(this.groupId, lobby.messageId);
-      } catch (error) {
-        console.error(JSON.stringify({ event: "unpin_failed", error: safeErrorMessage(error) }));
-      }
     }
     await this.api.flushEdits();
     await this.postActivity({ type: "start" });
