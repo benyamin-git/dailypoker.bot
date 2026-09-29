@@ -11,7 +11,7 @@ Every action gets its own group message: the action is the headline, the table s
 and the last line says who is next.
 
 ```
-🔥 Reza raises to 40
+🔥 Beny raises to 40
 
 🃏 Hand #12 — Flop · 💰 Pot 210 · cap 100
 
@@ -19,11 +19,11 @@ Board: A♠ K♦ 7♣ — —
 
 Still in
 👤 Ali — in 40
-👤 Reza — in 60
-🚨 Sara — all-in 100 — Q♠ Q♦
+👤 Beny — in 60
+🚨 Mani — all-in 100 — Q♠ Q♦
 
 Out
-✖ Babak — in 10
+✖ Rasa — in 10
 
 ⏭ Next: Ali — call 20 · 60s to act
 
@@ -50,15 +50,13 @@ Hold'em with fixed blinds, a short clock, and simplification-first choices:
 | Daily chips | `/daily` in DM grants 200 chips once per rolling 24 h |
 | Bankruptcy | broke players can still join hands (all-in for what they have); `/daily` tops them up |
 
-Full normative rules, worked examples and edge cases: [`plan/03-game-rules.md`](plan/03-game-rules.md).
-
 ## Commands
 
 Group:
 
 | Command | Who | What |
 |---|---|---|
-| `/newmatch` | anyone | open the lobby (pinned until the deal) |
+| `/newmatch` | anyone | open the lobby |
 | `/join`, `/leave` | anyone | enter/exit the lobby |
 | `/deal`, `/cancel` | starter | start the hand / cancel the lobby |
 | `/top` | anyone | group leaderboard |
@@ -98,8 +96,7 @@ Recommended settings:
 
 - `/setdescription`, `/setabouttext`, `/setuserpic` (optional)
 - `/setprivacy` → **Disable** (the bot must see group messages to handle commands)
-- Add the bot to your group and grant it **pin messages** and **delete messages** (needed for
-  table updates and cleanup)
+- Add the bot to your group and grant it **delete messages** (needed for cleanup)
 
 </details>
 
@@ -160,8 +157,7 @@ curl -sS "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/web
 1. Add the bot to the group (it must be allowlisted, else it replies once and goes silent).
 2. `/newmatch` → everyone taps **Join** → starter taps **Deal**.
 3. Every check, call, bet, raise, fold and timeout posts a fresh message with the action on
-   top and whose turn it is at the bottom; hole cards arrive in DM. The lobby message is
-   unpinned once the hand starts.
+   top and whose turn it is at the bottom; hole cards arrive in DM.
 4. After the hand, the result message offers **Show** and **Rematch**.
 
 </details>
@@ -219,9 +215,7 @@ Telegram ──webhook──▶ Worker (src/index.ts)
                  └─ throttled Telegram sender (src/telegram/)
 ```
 
-All game state lives in the Durable Object; the Worker is a thin router. See
-[`plan/05-architecture.md`](plan/05-architecture.md) for details and the full plan in
-[`plan/`](plan/).
+All game state lives in the Durable Object; the Worker is a thin router.
 
 ## Security notes
 
