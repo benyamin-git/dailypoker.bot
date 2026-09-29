@@ -170,6 +170,7 @@ export const faLabels: KeyboardLabels = {
   custom: "✏️ دلخواه",
   showHand: "نمایش دست من",
   rematch: "🔁 بازی مجدد",
+  resetGroup: "⚠️ پاک کردن این گروه",
 };
 
 export const fa: Messages = {
@@ -422,11 +423,26 @@ export const fa: Messages = {
   },
 
   nothingPendingText() {
-    return "چیزی در انتظار تأیید نیست. اول /resetgroup <chat_id> را اجرا کنید.";
+    return "چیزی برای تأیید نیست. اول /resetgroup را بفرستید.";
   },
 
-  resetGroupUsageText(chatId: number) {
-    return `روش استفاده: /resetgroup ${chatId} (سپس تأیید)`;
+  resetGroupPromptText(groupTitle: string | null, chatId: number) {
+    const group = groupTitle === null ? "این گروه" : `<b>${escapeHtml(groupTitle)}</b>`;
+    return [
+      `⚠️ همهٔ دادههای ${group} (${chatId}) پاک شود؟`,
+      "",
+      "بازیکنان، موجودیها، آمار و تاریخچه پاک میشوند و بازگشتپذیر نیست.",
+      "",
+      "دکمه را بزنید، سپس RESET را تایپ کنید.",
+    ].join("\n");
+  },
+
+  resetGroupArmedText() {
+    return "⚠️ تأیید فعال شد. برای پاک کردن همین حالا RESET را تایپ کنید.";
+  },
+
+  resetGroupMismatchText() {
+    return "متن تأیید درست نیست. دقیقاً RESET را تایپ کنید.";
   },
 
   dailyClaimedText(balance: number) {
@@ -516,10 +532,6 @@ export const fa: Messages = {
       `وبهوک: ${webhookUrl ?? "تنظیم نشده"}`,
       `آپدیتهای در انتظار: ${pending}`,
     ].join("\n");
-  },
-
-  resetGroupConfirmText(chatId: number) {
-    return `⚠️ این کار همه بازیکنان، موجودیها و تاریخچه ${chatId} را پاک میکند.\nبرای ادامه بفرستید: /resetgroup confirm ${chatId}`;
   },
 
   resetGroupDoneText(chatId: number) {

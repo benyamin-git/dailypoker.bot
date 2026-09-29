@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetTelegramTransport, setDefaultMinEditInterval } from "../../src/telegram/api";
 import { formatAmount } from "../../src/telegram/messages";
 import {
+  callbackUpdate,
   cleanStorage,
   countRows,
   GROUP_ID,
@@ -288,20 +289,49 @@ describe("owner commands", () => {
     expect(version).toContain("example.com");
   });
 
-  it("wipes group storage after an explicit confirmation", async () => {
+  it("wipes group storage only after the owner arms reset and types RESET", async () => {
     await seedPlayer(P1, "Ali", 200, true);
     await groupMessage(P1, "/newmatch");
     let calls = installMockTelegram();
 
-    await dm(OWNER, "/resetgroup -1");
-    expect(texts(calls, OWNER)[0]).toContain("Usage");
+    await dm(P2, "/resetgroup");
+    expect(texts(calls, P2)[0]).toContain("Owner only.");
 
     calls = installMockTelegram();
-    await dm(OWNER, `/resetgroup ${GROUP_ID}`);
-    expect(texts(calls, OWNER)[0]).toContain("confirm");
+    await dm(OWNER, "RESET");
+    expect(texts(calls, OWNER)[0]).toContain("Nothing to confirm");
 
     calls = installMockTelegram();
-    await dm(OWNER, `/resetgroup confirm ${GROUP_ID}`);
+    await dm(OWNER, "/resetgroup");
+    expect(texts(calls, OWNER)[0]).toContain("type RESET");
+    const markup = sentMessages(calls, OWNER)[0]?.payload.reply_markup as {
+      inline_keyboard: { callback_data?: string }[][];
+    };
+    expect(markup.inline_keyboard[0]?.[0]?.callback_data).toBe("rg:arm");
+
+    calls = installMockTelegram();
+    await postUpdate(callbackUpdate(nextUpdateId(), P2, P2, "rg:arm", 1, "private", "Reza"));
+    expect(
+      calls.some(
+        (call) =>
+          call.method === "answerCallbackQuery" &&
+          String(call.payload.text).includes("Owner only."),
+      ),
+    ).toBe(true);
+
+    calls = installMockTelegram();
+    await postUpdate(callbackUpdate(nextUpdateId(), OWNER, OWNER, "rg:arm", 1, "private", "Owner"));
+    expect(texts(calls, OWNER)[0]).toContain("Armed");
+
+    calls = installMockTelegram();
+    await dm(OWNER, "reset");
+    expect(texts(calls, OWNER)[0]).toContain("not the confirmation word");
+
+    await dm(P2, "RESET");
+    expect(await countRows("players")).toBeGreaterThan(0);
+
+    calls = installMockTelegram();
+    await dm(OWNER, "RESET");
     expect(texts(calls, OWNER)[0]).toContain("wiped");
     expect(await countRows("players")).toBe(0);
     expect(await countRows("matches")).toBe(0);

@@ -8,6 +8,7 @@ import {
   MAX_PLAYERS,
   MIN_JOIN_BALANCE,
   MIN_PLAYERS,
+  RESET_CONFIRM_TTL_MS,
   RUNOUT_STEP_MS,
   TURN_SECONDS,
 } from "../config";
@@ -56,6 +57,9 @@ import * as store from "./store";
 
 const STATE_KEY = "table_state";
 const STATE_VERSION = 1;
+const RESET_PENDING_KEY = "reset_pending";
+const RESET_CONFIRM_WORD = "RESET";
+const RESET_ARM_DATA = "rg:arm";
 
 interface LobbyState {
   matchId: number;
@@ -113,6 +117,7 @@ const ACTIVE_STATUSES = new Set(["member", "administrator", "creator"]);
 
 type CommandIntent = Extract<Intent, { kind: "command" }>;
 type CallbackIntent = Extract<Intent, { kind: "callback" }>;
+type TextIntent = Extract<Intent, { kind: "text" }>;
 type ChatMemberIntent = Extract<Intent, { kind: "chat_member" }>;
 
 interface ActionContext {
@@ -286,6 +291,10 @@ export class TableDO extends DurableObject<Bindings> {
     }
     if (intent.kind === "command") {
       await this.handleCommand(intent);
+      return;
+    }
+    if (intent.kind === "text") {
+      await this.handleText(intent);
       return;
     }
     if (intent.kind === "callback") {
@@ -484,6 +493,10 @@ export class TableDO extends DurableObject<Bindings> {
   }
 
   private async handleCallback(intent: CallbackIntent): Promise<void> {
+    if (intent.chatType === "private" && intent.data === RESET_ARM_DATA) {
+      await this.armReset(intent);
+      return;
+    }
     const data = parseCallbackData(intent.data);
     const userId = intent.userId;
     if (!data) {
@@ -1427,27 +1440,67 @@ export class TableDO extends DurableObject<Bindings> {
       await this.privateAlert(intent.userId, this.msg.ownerOnlyText());
       return;
     }
-    const parts = intent.args.trim().split(/\s+/);
-    if (parts[0] === "confirm") {
-      const target = Number(parts[1]);
-      const pending = store.getMeta(this.sql, "reset_pending");
-      if (pending === null || Number(pending) !== target) {
+    const title = store.getMeta(this.sql, "group_title");
+    await this.api.sendMessage(intent.chatId, this.msg.resetGroupPromptText(title, this.groupId), {
+      reply_markup: {
+        inline_keyboard: [[{ text: this.msg.labels.resetGroup, callback_data: RESET_ARM_DATA }]],
+      },
+    });
+  }
+
+  private async armReset(intent: CallbackIntent): Promise<void> {
+    if (intent.userId !== this.config.ownerUserId) {
+      await this.api.answerCallbackQuery(intent.callbackId, {
+        text: this.msg.ownerOnlyText(),
+        show_alert: true,
+      });
+      return;
+    }
+    store.setMeta(
+      this.sql,
+      RESET_PENDING_KEY,
+      JSON.stringify({ userId: intent.userId, at: Date.now() }),
+    );
+    await this.api.answerCallbackQuery(intent.callbackId);
+    await this.api.sendMessage(intent.chatId, this.msg.resetGroupArmedText());
+  }
+
+  private resetPending(): { userId: number; at: number } | null {
+    const raw = store.getMeta(this.sql, RESET_PENDING_KEY);
+    if (raw === null) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as { userId: number; at: number };
+    } catch {
+      return null;
+    }
+  }
+
+  private async handleText(intent: TextIntent): Promise<void> {
+    if (!intent.isDm || intent.userId !== this.config.ownerUserId) {
+      return;
+    }
+    const pending = this.resetPending();
+    if (pending === null || pending.userId !== intent.userId) {
+      if (intent.text.trim() === RESET_CONFIRM_WORD) {
         await this.api.sendMessage(intent.chatId, this.msg.nothingPendingText());
-        return;
       }
-      store.wipeGroup(this.sql);
-      this.state = emptyState();
-      this.persist();
-      await this.api.sendMessage(intent.chatId, this.msg.resetGroupDoneText(target));
       return;
     }
-    const target = Number(parts[0]);
-    if (!Number.isSafeInteger(target) || target !== this.groupId) {
-      await this.api.sendMessage(intent.chatId, this.msg.resetGroupUsageText(this.groupId));
+    if (Date.now() - pending.at > RESET_CONFIRM_TTL_MS) {
+      store.deleteMeta(this.sql, RESET_PENDING_KEY);
+      await this.api.sendMessage(intent.chatId, this.msg.nothingPendingText());
       return;
     }
-    store.setMeta(this.sql, "reset_pending", String(target));
-    await this.api.sendMessage(intent.chatId, this.msg.resetGroupConfirmText(target));
+    if (intent.text.trim() !== RESET_CONFIRM_WORD) {
+      await this.api.sendMessage(intent.chatId, this.msg.resetGroupMismatchText());
+      return;
+    }
+    store.wipeGroup(this.sql);
+    this.state = emptyState();
+    this.persist();
+    await this.api.sendMessage(intent.chatId, this.msg.resetGroupDoneText(this.groupId));
   }
 
   private async dmCards(userId: number): Promise<void> {

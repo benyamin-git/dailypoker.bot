@@ -39,7 +39,7 @@ live in `src/telegram/messages.ts`. Parse mode: **HTML** (all user names escaped
 | Command | Effect |
 |---|---|
 | `/version` | Worker version + webhook info summary |
-| `/resetgroup <chat_id>` | Wipes a group's storage (destructive, confirmation required) |
+| `/resetgroup` | DM-only: shows the group and a reset button; after tapping it, typing `RESET` wipes the group's storage (destructive) |
 
 Command visibility: all group command messages **stay in the chat** (owner decision U4).
 The bot never deletes player messages; the delete admin right is only for bot-housekeeping.

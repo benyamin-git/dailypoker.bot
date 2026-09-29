@@ -82,7 +82,8 @@ Private chat (DM):
 The language is a per-group setting: `/fa` or `/en` from the group (or from DM) switches every
 group message, button and DM for that group's table. English is the default.
 
-Owner only: `/version`, `/resetgroup` (confirmation required).
+Owner only: `/version`, `/resetgroup` — the latter replies in DM with a reset button; tap it, then
+type `RESET` to wipe the group's players, balances and history.
 
 ## Self-hosting quick start
 
@@ -231,7 +232,7 @@ All game state lives in the Durable Object; the Worker is a thin router. See
 - All user-facing strings are HTML-escaped; callbacks validate actor, match, turn and action
   server-side.
 - Data retention: hand history is pruned to the newest 1,000 matches per group; the owner can
-  wipe all group data with `/resetgroup`.
+  wipe all group data from DM (`/resetgroup` → button → type `RESET`).
 
 ## License
 

@@ -71,6 +71,7 @@ export interface KeyboardLabels {
   custom: string;
   showHand: string;
   rematch: string;
+  resetGroup: string;
 }
 
 export interface Messages {
@@ -122,7 +123,9 @@ export interface Messages {
   needMorePlayersError(): string;
   playerBrokeError(name: string): string;
   nothingPendingText(): string;
-  resetGroupUsageText(chatId: number): string;
+  resetGroupPromptText(groupTitle: string | null, chatId: number): string;
+  resetGroupArmedText(): string;
+  resetGroupMismatchText(): string;
 
   dailyClaimedText(balance: number): string;
   dailyTooEarlyText(remainingMs: number): string;
@@ -133,7 +136,6 @@ export interface Messages {
   historyText(rows: HistoryView[]): string;
   leaderboardText(rows: LeaderboardRow[], groupTitle: string | null): string;
   versionText(version: string, webhookUrl: string | null, pending: number): string;
-  resetGroupConfirmText(chatId: number): string;
   resetGroupDoneText(chatId: number): string;
   ownerOnlyText(): string;
 

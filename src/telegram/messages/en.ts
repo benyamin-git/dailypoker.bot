@@ -149,6 +149,7 @@ export const enLabels: KeyboardLabels = {
   custom: "✏️ Custom",
   showHand: "Show my hand",
   rematch: "🔁 Rematch",
+  resetGroup: "⚠️ Reset this group",
 };
 
 export const en: Messages = {
@@ -399,11 +400,26 @@ export const en: Messages = {
   },
 
   nothingPendingText() {
-    return "Nothing pending. Run /resetgroup <chat_id> first.";
+    return "Nothing to confirm. Send /resetgroup first.";
   },
 
-  resetGroupUsageText(chatId: number) {
-    return `Usage: /resetgroup ${chatId} (then confirm)`;
+  resetGroupPromptText(groupTitle: string | null, chatId: number) {
+    const group = groupTitle === null ? "this group" : `<b>${escapeHtml(groupTitle)}</b>`;
+    return [
+      `⚠️ Reset ALL data for ${group} (${chatId})?`,
+      "",
+      "This wipes every player, balance, stat and hand history. It cannot be undone.",
+      "",
+      "Tap the button, then type RESET.",
+    ].join("\n");
+  },
+
+  resetGroupArmedText() {
+    return "⚠️ Armed. Type RESET (all caps) to wipe the group now.";
+  },
+
+  resetGroupMismatchText() {
+    return "That is not the confirmation word. Type RESET exactly.";
   },
 
   dailyClaimedText(balance: number) {
@@ -493,10 +509,6 @@ export const en: Messages = {
       `Webhook: ${webhookUrl ?? "not set"}`,
       `Pending updates: ${pending}`,
     ].join("\n");
-  },
-
-  resetGroupConfirmText(chatId: number) {
-    return `⚠️ This wipes all players, balances and history for ${chatId}.\nSend /resetgroup confirm ${chatId} to proceed.`;
   },
 
   resetGroupDoneText(chatId: number) {

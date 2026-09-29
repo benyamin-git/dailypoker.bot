@@ -15,6 +15,7 @@ export {
 } from "./engine/constants";
 
 export const RUNOUT_STEP_MS = 2000;
+export const RESET_CONFIRM_TTL_MS = 5 * 60 * 1000;
 export const EDIT_MIN_INTERVAL_MS = 1000;
 export const SEND_CAP_PER_UPDATE = 16;
 export const USER_ACTION_INTERVAL_MS = 1000;
