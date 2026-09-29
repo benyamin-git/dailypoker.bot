@@ -65,10 +65,8 @@ export interface KeyboardLabels {
   call: (amount: number) => string;
   raise: string;
   bet: (amount: number) => string;
-  raiseMin: (to: number) => string;
-  raiseStep: (step: number, to: number) => string;
+  raiseTo: (to: number) => string;
   allIn: (to: number) => string;
-  custom: string;
   showHand: string;
   rematch: string;
   resetGroup: string;

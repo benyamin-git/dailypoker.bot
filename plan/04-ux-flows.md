@@ -160,9 +160,11 @@ Out
 - The footer states the 60 s limit, not a live countdown: the timeout auto-action posts its own
   message.
 - `Call` becomes `Check` when `to call = 0`. `Raise ▾` edits only the keyboard of the message
-  it was pressed on (`[ Min — to 60 ] [ +20 — to 80 ] [ All-in — 100 ] [ ✏️ Custom ]`;
-  `Custom` alerts `Type /raise <amount> (multiples of 10).`). Picking an amount posts the new
-  action message.
+  it was pressed on into one button per legal amount — every multiple of 10 from the minimum
+  raise to the all-in cap that hand, e.g. `[ Raise 60 ] [ Raise 70 ] [ Raise 80 ] [ Raise 90 ]`
+  (a preflop bet menu shows `Bet 10` … `Bet 90`, laid out 5 per row). A short all-in that is
+  not a full raise keeps its own `All-in — N` button. Picking an amount posts the new action
+  message; `/raise <amount>` remains the typed fallback.
 - `🂠 Cards` shows the player's hole cards in a **private alert** (also available via `/cards` DM).
 
 ### All-in runout

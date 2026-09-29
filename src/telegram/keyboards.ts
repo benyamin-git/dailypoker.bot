@@ -1,4 +1,4 @@
-import { BET_MULTIPLE } from "../config";
+import { BET_MULTIPLE, MIN_BET_STEP } from "../config";
 import { maxRaiseTo, minFullRaiseTo } from "../engine/hand";
 import type { MatchState, PlayerState } from "../engine/types";
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from "./api";
@@ -50,9 +50,11 @@ export function lobbyKeyboard(
 
 export interface RaiseOption {
   label: string;
-  kind: "bet" | "raise" | "allin" | "custom";
+  kind: "bet" | "raise" | "allin";
   to?: number;
 }
+
+const RAISE_ROW_SIZE = 5;
 
 export function raiseOptions(
   state: MatchState,
@@ -62,27 +64,20 @@ export function raiseOptions(
   const options: RaiseOption[] = [];
   const maxTo = maxRaiseTo(state, player);
   if (state.currentBet === 0) {
-    if (maxTo >= BET_MULTIPLE) {
-      options.push({ label: labels.bet(BET_MULTIPLE), kind: "bet", to: BET_MULTIPLE });
+    for (let to = MIN_BET_STEP; to <= maxTo; to += BET_MULTIPLE) {
+      options.push({ label: labels.bet(to), kind: "bet", to });
     }
   } else {
     const minRaise = minFullRaiseTo(state, player);
     if (minRaise !== null) {
-      options.push({ label: labels.raiseMin(minRaise), kind: "raise", to: minRaise });
-      const nextStep = minRaise + BET_MULTIPLE;
-      if (nextStep <= maxTo) {
-        options.push({
-          label: labels.raiseStep(BET_MULTIPLE, nextStep),
-          kind: "raise",
-          to: nextStep,
-        });
+      for (let to = minRaise; to <= maxTo; to += BET_MULTIPLE) {
+        options.push({ label: labels.raiseTo(to), kind: "raise", to });
       }
     }
   }
   if (maxTo > state.currentBet && !options.some((option) => option.to === maxTo)) {
     options.push({ label: labels.allIn(maxTo), kind: "allin", to: maxTo });
   }
-  options.push({ label: labels.custom, kind: "custom" });
   return options;
 }
 
@@ -125,14 +120,15 @@ export function raiseKeyboard(options: {
   turnId: number;
   options: RaiseOption[];
 }): InlineKeyboardMarkup {
-  const row: InlineKeyboardButton[] = [];
-  for (const option of options.options) {
-    row.push({
-      text: option.label,
-      callback_data: callbackData(options.matchId, options.turnId, option.kind, option.to),
-    });
+  const buttons: InlineKeyboardButton[] = options.options.map((option) => ({
+    text: option.label,
+    callback_data: callbackData(options.matchId, options.turnId, option.kind, option.to),
+  }));
+  const rows: InlineKeyboardButton[][] = [];
+  for (let i = 0; i < buttons.length; i += RAISE_ROW_SIZE) {
+    rows.push(buttons.slice(i, i + RAISE_ROW_SIZE));
   }
-  return { inline_keyboard: [row] };
+  return { inline_keyboard: rows };
 }
 
 export function resultKeyboard(matchId: number, labels: KeyboardLabels): InlineKeyboardMarkup {

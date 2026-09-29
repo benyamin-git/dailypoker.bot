@@ -300,7 +300,10 @@ describe("betting validation", () => {
     const markup = calls.find((call) => call.method === "editMessageReplyMarkup");
     expect(markup).toBeDefined();
     expect(markup?.payload.message_id).toBe(1);
-    expect(JSON.stringify(markup?.payload.reply_markup)).toContain("Bet 10");
+    const buttons = JSON.stringify(markup?.payload.reply_markup);
+    expect(buttons).toContain("Bet 10");
+    expect(buttons).toContain("Bet 90");
+    expect(buttons).not.toContain("Custom");
     expect(calls.some((call) => call.method === "sendMessage")).toBe(false);
   });
 });
