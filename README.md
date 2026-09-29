@@ -230,7 +230,4 @@ All game state lives in the Durable Object; the Worker is a thin router.
 
 ## License
 
-No license is granted. This repository is source-available: you may read it, self-host it with
-your own bot and Cloudflare account, but redistribution and resale are not permitted. If you
-plan to run it for your own group, do so with your own credentials and your own Cloudflare
-account.
+[DO WHATEVER YOU WANT LICENSE](LICENSE).
