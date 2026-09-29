@@ -40,8 +40,8 @@ Hold'em with fixed blinds, a short clock, and simplification-first choices:
 | Rule | v1 |
 |---|---|
 | Table size | 2–9 players |
-| Stacks | 100 max in per hand (the ante counts toward it); balances adjust by hand result |
-| Ante | 10 each, posted at the deal (no blinds) |
+| Stacks | 100 max in per hand (the entry counts toward it); balances adjust by hand result |
+| Entry | 10 each, posted at the deal (no blinds) |
 | Buy-in | one hand at a time; rejoin next hand |
 | Turn timer | 60 seconds, then auto check/fold |
 | Raise rule | min-raise increments, bet sizes are multiples of 10 |
@@ -63,6 +63,7 @@ Group:
 | `/deal`, `/cancel` | starter | start the hand / cancel the lobby |
 | `/top` | anyone | group leaderboard |
 | `/rules` | anyone | rules summary in chat |
+| `/fa`, `/en` | anyone | switch the bot language (Persian/English) |
 | `/ping` | anyone | liveness check |
 
 Private chat (DM):
@@ -76,6 +77,10 @@ Private chat (DM):
 | `/history [n]` | last n hands (default 5, max 20) |
 | `/cards` | your hole cards for the current hand |
 | `/rules` | full rules |
+| `/fa`, `/en` | switch the bot language (Persian/English) |
+
+The language is a per-group setting: `/fa` or `/en` from the group (or from DM) switches every
+group message, button and DM for that group's table. English is the default.
 
 Owner only: `/version`, `/resetgroup` (confirmation required).
 
@@ -190,6 +195,10 @@ bun run format       # biome check --write
 Tests in `test/engine/` run the pure engine (including a heavy `TEST_HEAVY=1` oracle against
 `pokersolver`); `test/do/` boots the real Worker + TableDO in Miniflare with a mocked Telegram
 transport; `test/noeffects/` runs the same DO with `EFFECTS_ENABLED=false`.
+
+User-facing strings live in `src/telegram/messages/`: one catalogue per language (`en.ts`,
+`fa.ts`) implementing a shared `Messages` interface, with `/fa` and `/en` toggling the group's
+choice (persisted in the Durable Object's `meta` table).
 
 The engine (`src/engine/`) is deliberately import-free from the rest of the codebase — a
 purity test enforces it — so it can be reused and audited standalone.

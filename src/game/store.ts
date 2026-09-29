@@ -93,6 +93,16 @@ export function deleteMeta(sql: SqlStorage, key: string): void {
   sql.exec("DELETE FROM meta WHERE key = ?", key);
 }
 
+export type GroupLang = "en" | "fa";
+
+export function getLang(sql: SqlStorage): GroupLang {
+  return getMeta(sql, "group_lang") === "fa" ? "fa" : "en";
+}
+
+export function setLang(sql: SqlStorage, lang: GroupLang): void {
+  setMeta(sql, "group_lang", lang);
+}
+
 export function isUpdateProcessed(sql: SqlStorage, updateId: number): boolean {
   const rows = sql
     .exec("SELECT 1 AS present FROM processed_updates WHERE update_id = ?", updateId)

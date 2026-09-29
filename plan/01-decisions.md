@@ -65,10 +65,10 @@ planning session. Do not silently change any of them; propose amendments instead
 
 | # | Decision | Details |
 |---|---|---|
-| G1 | **One hand = one match** | Join → ante → one hand → pot → done |
+| G1 | **One hand = one match** | Join → entry → one hand → pot → done |
 | G2 | Join eligibility: **balance ≥ 100** | Ensures the cap is always coverable; also blocks broke players until daily |
-| G3 | Every player pays a **10-chip ante** ("preblind") at deal | No small/big blind concept exists |
-| G4 | **Cap: 100 total contribution per player per match, ante included**; reaching cap = all-in | Max possible loss per match = 100 |
+| G3 | Every player pays a **10-chip entry** ("preblind") at deal | No small/big blind concept exists |
+| G4 | **Cap: 100 total contribution per player per match, entry included**; reaching cap = all-in | Max possible loss per match = 100 |
 | G5 | Bet amounts are **multiples of 10** | Clean buttons, easy mental math |
 | G6 | **Minimum raise matches the previous raise**; initial bet/raise step = 10 | Standard min-raise semantics under the multiples-of-10 constraint |
 | G7 | **Action order is re-randomized every hand** | No positional/button state; fairness without blinds |
@@ -121,7 +121,7 @@ to veto:
 4. `/top` is public in the group; `/balance` replies publicly when used in the group and
    privately in DM; `/stats` and `/history` reply in DM.
 5. 24h rolling daily cooldown (no timezone/reset-hour logic).
-6. Escrow model: antes/bets deduct from balance as they happen; pot credited at hand end.
+6. Escrow model: entries/bets deduct from balance as they happen; pot credited at hand end.
 7. Raise UI is street-level ("raise to N"), multiples of 10, cap-aware helper text.
 8. Webhook path contains a random secret segment **plus** the Telegram secret-token header.
 9. `setMyCommands` configured for group scope and private scope.

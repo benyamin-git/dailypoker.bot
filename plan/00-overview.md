@@ -71,8 +71,8 @@ learn a complex interface.
 
 - **Balance / bankroll** — per-group play chips owned by a player.
 - **Match** — one poker hand; the entire game loop.
-- **Ante / preblind** — the 10 chips every player pays to enter a match.
-- **Contribution** — total chips a player has put into the current match (ante included).
+- **Entry / preblind** — the 10 chips every player pays to enter a match.
+- **Contribution** — total chips a player has put into the current match (entry included).
 - **Cap** — 100 chips total contribution per player per match; reaching it = all-in.
 - **Room** — remaining contribution space (`100 − contribution`).
 - **Deal** — the starter's action that begins the hand.

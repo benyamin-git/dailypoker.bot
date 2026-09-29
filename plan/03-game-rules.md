@@ -9,8 +9,8 @@ is the authority; the engine tests must encode every clause here.
 
 - **Balance** — per-group play chips owned by a player.
 - **Match** — one poker hand; the complete game loop.
-- **Ante (preblind)** — 10 chips paid by every player at deal.
-- **Contribution** — total chips a player has put in this match (ante included).
+- **Entry (preblind)** — 10 chips paid by every player at deal.
+- **Contribution** — total chips a player has put in this match (entry included).
 - **Cap** — 100 chips total contribution per player per match. Reaching the cap = all-in.
 - **Room** — `100 − contribution`; the maximum additional chips a player may put in.
 - **Hand order** — the shuffled acting order for this match (redrawn every match).
@@ -35,7 +35,7 @@ is the authority; the engine tests must encode every clause here.
 4. **Deal** — the starter taps `Deal` (`/deal`) once at least 2 players have joined. All
    balances are re-checked (`≥ 100`); if a player fails, the deal is blocked with a message
    naming them.
-5. **Antes** — at deal, 10 chips are deducted from every player (escrow) and paid into the
+5. **Entries** — at deal, 10 chips are deducted from every player (escrow) and paid into the
    pot. The hand then proceeds automatically.
 6. **Cancel / take over** — the starter may cancel before the deal. If the starter leaves
    their own lobby, the lobby stays open and `Take over` appears; the first remaining player
@@ -63,7 +63,7 @@ Streets: **preflop → flop → turn → river → showdown**.
 - **Minimum raise**: the raise must increase the current street bet by **at least the
   previous raise increment**. Initial increment is 10.
   Example: bet 20 → min raise to 40; raise to 40 (increment 20) → min re-raise to 60.
-- **Cap**: contribution may never exceed 100 (ante included). Moving to exactly 100 is
+- **Cap**: contribution may never exceed 100 (entry included). Moving to exactly 100 is
   **all-in** ("all-in" here means *cap reached*, not *bankrupt* — a player with 1,000 chips
   who commits 100 is all-in for the match). A player whose room cannot cover a full minimum
   raise may still call, and may also move all-in if that exceeds the call amount; the
@@ -117,7 +117,7 @@ Streets: **preflop → flop → turn → river → showdown**.
 
 6. At the start of every street, all active players have equal contributions: a street ends
    only when every active player has matched the highest street total (or is all-in at the
-   cap — see 7), and antes are uniform.
+   cap — see 7), and entries are uniform.
 7. A player moving all-in lands at exactly 100. A caller matching the shover's street total
    `X` reaches the same contribution (`street_start_contribution + X`) — i.e. exactly 100.
 8. Hence after a called all-in every remaining player is at the cap with zero room, no raise
@@ -141,7 +141,7 @@ state** — legal actions derive purely from the current bet and remaining room.
 
 Players A, B, C, D (all balance ≥ 100). Hand order drawn: D, A, C, B.
 
-- **Deal/ante**: each pays 10 → pot 40; contributions all 10.
+- **Deal/entry**: each pays 10 → pot 40; contributions all 10.
 - **Preflop**: D bets 20 (contrib 30). A calls (30). C raises to 40 — legal: previous
   increment 20 → min raise to 40 (contrib 50). B folds (contrib 10, dead money). D calls
   +20 (50). A calls +20 (50). Pot = 50 + 50 + 50 + 10 (dead B) = 160.
@@ -152,7 +152,7 @@ Players A, B, C, D (all balance ≥ 100). Hand order drawn: D, A, C, B.
 - **River**: no betting possible; dealt automatically; **all three hands revealed**.
 - **Showdown**: best hand wins 310. B's 10 chips stayed in the pot as dead money.
 
-### Short all-in example (3 players, cap 100, ante 10)
+### Short all-in example (3 players, cap 100, entry 10)
 
 Hand order: A, B, C. **Preflop**: A bets 20 (30). B raises to 40 (50). C calls (50). A calls
 +20 (50). Pot 150.

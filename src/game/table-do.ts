@@ -43,7 +43,14 @@ import {
   resultKeyboard,
   tableKeyboard,
 } from "../telegram/keyboards";
-import * as messages from "../telegram/messages";
+import {
+  cardsText,
+  errorBox,
+  getMessages,
+  type Lang,
+  type Messages,
+  type TableActivity,
+} from "../telegram/messages";
 import { hashId, safeErrorMessage } from "../util/log";
 import * as store from "./store";
 
@@ -121,6 +128,7 @@ export class TableDO extends DurableObject<Bindings> {
   private readonly config: AppConfig;
   private readonly api: TelegramApi;
   private state: TableState = emptyState();
+  private lang: Lang = "en";
 
   constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
@@ -130,7 +138,12 @@ export class TableDO extends DurableObject<Bindings> {
     ctx.blockConcurrencyWhile(async () => {
       store.runMigrations(this.sql);
       this.state = this.loadState();
+      this.lang = store.getLang(this.sql);
     });
+  }
+
+  private get msg(): Messages {
+    return getMessages(this.lang);
   }
 
   private loadState(): TableState {
@@ -303,7 +316,7 @@ export class TableDO extends DurableObject<Bindings> {
       return;
     }
     store.setMeta(this.sql, key, "1");
-    await this.api.sendMessage(chatId, messages.unknownGroupText());
+    await this.api.sendMessage(chatId, this.msg.unknownGroupText());
   }
 
   private namesFor(userIds: number[]): Map<number, string> {
@@ -317,7 +330,7 @@ export class TableDO extends DurableObject<Bindings> {
 
   private async privateAlert(userId: number, text: string): Promise<void> {
     try {
-      await this.api.sendMessage(userId, messages.errorBox(text));
+      await this.api.sendMessage(userId, errorBox(text));
     } catch (error) {
       console.error(
         JSON.stringify({
@@ -350,13 +363,17 @@ export class TableDO extends DurableObject<Bindings> {
           await this.handleStart(intent, args);
           return;
         case "rules":
-          await this.api.sendMessage(intent.chatId, messages.rulesText());
+          await this.api.sendMessage(intent.chatId, this.msg.rulesText());
           return;
         case "help":
-          await this.api.sendMessage(intent.chatId, messages.helpText(true));
+          await this.api.sendMessage(intent.chatId, this.msg.helpText(true));
           return;
         case "ping":
-          await this.api.sendMessage(intent.chatId, messages.pingText());
+          await this.api.sendMessage(intent.chatId, this.msg.pingText());
+          return;
+        case "fa":
+        case "en":
+          await this.setLanguage(intent, command === "fa" ? "fa" : "en");
           return;
         case "cards":
           await this.dmCards(userId);
@@ -380,7 +397,7 @@ export class TableDO extends DurableObject<Bindings> {
           await this.resetGroup(intent);
           return;
         default:
-          await this.api.sendMessage(intent.chatId, messages.helpText(true));
+          await this.api.sendMessage(intent.chatId, this.msg.helpText(true));
           return;
       }
     }
@@ -388,7 +405,7 @@ export class TableDO extends DurableObject<Bindings> {
     const context: ActionContext = { source: "command" };
     switch (command) {
       case "ping":
-        await this.api.sendMessage(intent.chatId, messages.pingText());
+        await this.api.sendMessage(intent.chatId, this.msg.pingText());
         return;
       case "newmatch":
         await this.openLobby(intent.user);
@@ -417,11 +434,11 @@ export class TableDO extends DurableObject<Bindings> {
       case "raise": {
         const amount = Number(args.trim());
         if (!Number.isSafeInteger(amount) || amount <= 0) {
-          await this.privateAlert(userId, "Type /raise <amount> (multiples of 10).");
+          await this.privateAlert(userId, this.msg.raiseTypeText());
           return;
         }
         if (amount % 10 !== 0) {
-          await this.privateAlert(userId, messages.amountMultipleAlert());
+          await this.privateAlert(userId, this.msg.amountMultipleAlert());
           return;
         }
         await this.betting(userId, { kind: "raise", to: amount }, context);
@@ -446,14 +463,24 @@ export class TableDO extends DurableObject<Bindings> {
         await this.sendHistory(userId, userId, args);
         return;
       case "rules":
-        await this.api.sendMessage(intent.chatId, messages.rulesText());
+        await this.api.sendMessage(intent.chatId, this.msg.rulesText());
         return;
       case "help":
-        await this.api.sendMessage(intent.chatId, messages.helpText(false));
+        await this.api.sendMessage(intent.chatId, this.msg.helpText(false));
+        return;
+      case "fa":
+      case "en":
+        await this.setLanguage(intent, command === "fa" ? "fa" : "en");
         return;
       default:
         return;
     }
+  }
+
+  private async setLanguage(intent: CommandIntent, lang: Lang): Promise<void> {
+    store.setLang(this.sql, lang);
+    this.lang = lang;
+    await this.api.sendMessage(intent.chatId, this.msg.languageSetText(lang));
   }
 
   private async handleCallback(intent: CallbackIntent): Promise<void> {
@@ -461,7 +488,7 @@ export class TableDO extends DurableObject<Bindings> {
     const userId = intent.userId;
     if (!data) {
       await this.api.answerCallbackQuery(intent.callbackId, {
-        text: messages.staleMoveAlert(),
+        text: this.msg.staleMoveAlert(),
       });
       return;
     }
@@ -475,7 +502,7 @@ export class TableDO extends DurableObject<Bindings> {
     const requireLobby = async (): Promise<boolean> => {
       if (!this.lobbyMatches(data.matchId)) {
         await this.api.answerCallbackQuery(intent.callbackId, {
-          text: messages.lobbyExpiredAlert(),
+          text: this.msg.lobbyExpiredAlert(),
         });
         return false;
       }
@@ -524,13 +551,13 @@ export class TableDO extends DurableObject<Bindings> {
             match.turnId !== data.turnId
           ) {
             await this.api.answerCallbackQuery(intent.callbackId, {
-              text: messages.staleMoveAlert(),
+              text: this.msg.staleMoveAlert(),
             });
             return;
           }
           if (!player) {
             await this.api.answerCallbackQuery(intent.callbackId, {
-              text: messages.notInMatchAlert(),
+              text: this.msg.notInMatchAlert(),
             });
             return;
           }
@@ -538,7 +565,7 @@ export class TableDO extends DurableObject<Bindings> {
             const actorId = match.actorUserId as number;
             const actorName = this.namesFor([actorId]).get(actorId) as string;
             await this.api.answerCallbackQuery(intent.callbackId, {
-              text: messages.notYourTurnAlert(actorName),
+              text: this.msg.notYourTurnAlert(actorName),
             });
             return;
           }
@@ -550,7 +577,7 @@ export class TableDO extends DurableObject<Bindings> {
                 raiseKeyboard({
                   matchId: match.matchId,
                   turnId: match.turnId,
-                  options: raiseOptions(match, player),
+                  options: raiseOptions(match, player, this.msg.labels),
                 }),
               );
             } catch (error) {
@@ -563,7 +590,7 @@ export class TableDO extends DurableObject<Bindings> {
             }
           }
           await this.api.answerCallbackQuery(intent.callbackId, {
-            text: "Pick an amount or type /raise <amount>.",
+            text: this.msg.raisePickText(),
             show_alert: true,
           });
           return;
@@ -576,7 +603,7 @@ export class TableDO extends DurableObject<Bindings> {
         return;
       case "raisecustom":
         await this.api.answerCallbackQuery(intent.callbackId, {
-          text: "Type /raise <amount> (multiples of 10).",
+          text: this.msg.raiseTypeText(),
           show_alert: true,
         });
         return;
@@ -584,12 +611,12 @@ export class TableDO extends DurableObject<Bindings> {
         const player = this.state.match?.players.find((candidate) => candidate.userId === userId);
         if (!player?.hole) {
           await this.api.answerCallbackQuery(intent.callbackId, {
-            text: messages.cardsNoneAlert(),
+            text: this.msg.cardsNoneAlert(),
           });
           return;
         }
         await this.api.answerCallbackQuery(intent.callbackId, {
-          text: `Your hand: ${messages.cardsText(player.hole)}`,
+          text: this.msg.yourHandAlert(cardsText(player.hole)),
           show_alert: true,
         });
         return;
@@ -597,7 +624,7 @@ export class TableDO extends DurableObject<Bindings> {
       case "show": {
         if (this.state.match?.matchId !== data.matchId || this.state.match.status !== "done") {
           await this.api.answerCallbackQuery(intent.callbackId, {
-            text: messages.showNoneAlert(),
+            text: this.msg.showNoneAlert(),
           });
           return;
         }
@@ -607,7 +634,7 @@ export class TableDO extends DurableObject<Bindings> {
       case "rematch": {
         if (this.state.match?.matchId !== data.matchId || this.state.match.status !== "done") {
           await this.api.answerCallbackQuery(intent.callbackId, {
-            text: messages.staleMoveAlert(),
+            text: this.msg.staleMoveAlert(),
           });
           return;
         }
@@ -616,7 +643,7 @@ export class TableDO extends DurableObject<Bindings> {
       }
       default:
         await this.api.answerCallbackQuery(intent.callbackId, {
-          text: messages.staleMoveAlert(),
+          text: this.msg.staleMoveAlert(),
         });
     }
   }
@@ -631,13 +658,13 @@ export class TableDO extends DurableObject<Bindings> {
     if (joinMatch) {
       const matchId = Number(joinMatch[1]);
       if (!this.lobbyMatches(matchId)) {
-        await this.api.sendMessage(intent.chatId, messages.lobbyExpiredAlert());
+        await this.api.sendMessage(intent.chatId, this.msg.lobbyExpiredAlert());
         return;
       }
       await this.joinLobby(intent.user, { source: "dm" });
       return;
     }
-    await this.api.sendMessage(intent.chatId, messages.welcomeText());
+    await this.api.sendMessage(intent.chatId, this.msg.welcomeText());
   }
 
   private async openLobby(starter: TelegramUser, callbackId?: string): Promise<void> {
@@ -650,16 +677,16 @@ export class TableDO extends DurableObject<Bindings> {
       }
     };
     if (this.state.lobby !== null) {
-      await reject(messages.matchOpenAlert());
+      await reject(this.msg.matchOpenAlert());
       return;
     }
     if (this.state.match !== null && this.state.match.status === "active") {
-      await reject(messages.matchActiveAlert());
+      await reject(this.msg.matchActiveAlert());
       return;
     }
     const player = store.ensurePlayer(this.sql, starter, now);
     if (player.balance < MIN_JOIN_BALANCE) {
-      await reject(messages.needBalanceAlert());
+      await reject(this.msg.needBalanceAlert());
       return;
     }
     const matchId = store.createMatchRow(this.sql, starter.id, now);
@@ -691,17 +718,20 @@ export class TableDO extends DurableObject<Bindings> {
       return;
     }
     const names = this.namesFor(lobby.playerIds);
-    const text = messages.lobbyText({
+    const text = this.msg.lobbyText({
       names,
       starterId: lobby.starterId,
       playerIds: lobby.playerIds,
       error: lobby.error,
     });
-    const keyboard = lobbyKeyboard({
-      matchId: lobby.matchId,
-      botUsername: this.config.botUsername,
-      takeoverAvailable: lobby.starterId === null,
-    });
+    const keyboard = lobbyKeyboard(
+      {
+        matchId: lobby.matchId,
+        botUsername: this.config.botUsername,
+        takeoverAvailable: lobby.starterId === null,
+      },
+      this.msg.labels,
+    );
     const message = await this.api.sendMessage(this.groupId, text, { reply_markup: keyboard });
     if (message) {
       lobby.messageId = message.message_id;
@@ -720,17 +750,20 @@ export class TableDO extends DurableObject<Bindings> {
       return;
     }
     const names = this.namesFor(lobby.playerIds);
-    const text = messages.lobbyText({
+    const text = this.msg.lobbyText({
       names,
       starterId: lobby.starterId,
       playerIds: lobby.playerIds,
       error: lobby.error,
     });
-    const keyboard = lobbyKeyboard({
-      matchId: lobby.matchId,
-      botUsername: this.config.botUsername,
-      takeoverAvailable: lobby.starterId === null,
-    });
+    const keyboard = lobbyKeyboard(
+      {
+        matchId: lobby.matchId,
+        botUsername: this.config.botUsername,
+        takeoverAvailable: lobby.starterId === null,
+      },
+      this.msg.labels,
+    );
     this.api.queueEdit(this.groupId, lobby.messageId, text, { reply_markup: keyboard });
   }
 
@@ -740,34 +773,34 @@ export class TableDO extends DurableObject<Bindings> {
     if (!lobby) {
       if (context.source === "callback" && context.callbackId) {
         await this.api.answerCallbackQuery(context.callbackId, {
-          text: messages.lobbyExpiredAlert(),
+          text: this.msg.lobbyExpiredAlert(),
         });
       } else {
-        await this.privateAlert(user.id, messages.lobbyExpiredAlert());
+        await this.privateAlert(user.id, this.msg.lobbyExpiredAlert());
       }
       return;
     }
     if (lobby.playerIds.includes(user.id)) {
       if (context.source === "callback" && context.callbackId) {
         await this.api.answerCallbackQuery(context.callbackId, {
-          text: messages.alreadyJoinedAlert(),
+          text: this.msg.alreadyJoinedAlert(),
         });
       } else {
-        await this.privateAlert(user.id, messages.alreadyJoinedAlert());
+        await this.privateAlert(user.id, this.msg.alreadyJoinedAlert());
       }
       return;
     }
     const player = store.ensurePlayer(this.sql, user, now);
     if (player.balance < MIN_JOIN_BALANCE) {
-      await this.failAction(context, user.id, messages.needBalanceAlert());
+      await this.failAction(context, user.id, this.msg.needBalanceAlert());
       return;
     }
     if (lobby.playerIds.length >= MAX_PLAYERS) {
-      await this.failAction(context, user.id, messages.tableFullAlert());
+      await this.failAction(context, user.id, this.msg.tableFullAlert());
       return;
     }
     if (player.dm_started === 0 && context.source === "callback") {
-      await this.failAction(context, user.id, messages.needDmAlert());
+      await this.failAction(context, user.id, this.msg.needDmAlert());
       return;
     }
     lobby.playerIds.push(user.id);
@@ -776,20 +809,20 @@ export class TableDO extends DurableObject<Bindings> {
     this.persist();
     await this.editLobbyMessage();
     if (context.source === "callback" && context.callbackId) {
-      await this.api.answerCallbackQuery(context.callbackId, { text: "You're in." });
+      await this.api.answerCallbackQuery(context.callbackId, { text: this.msg.inAlert() });
     } else if (context.source === "dm") {
-      await this.api.sendMessage(user.id, messages.joinedDmText());
+      await this.api.sendMessage(user.id, this.msg.joinedDmText());
     }
   }
 
   private async leaveLobby(user: TelegramUser, context: ActionContext): Promise<void> {
     const lobby = this.state.lobby;
     if (!lobby) {
-      await this.failAction(context, user.id, messages.lobbyExpiredAlert(), false);
+      await this.failAction(context, user.id, this.msg.lobbyExpiredAlert(), false);
       return;
     }
     if (!lobby.playerIds.includes(user.id)) {
-      await this.failAction(context, user.id, messages.notInMatchAlert());
+      await this.failAction(context, user.id, this.msg.notInMatchAlert());
       return;
     }
     lobby.playerIds = lobby.playerIds.filter((id) => id !== user.id);
@@ -802,7 +835,7 @@ export class TableDO extends DurableObject<Bindings> {
       this.state.lobby = null;
       this.persist();
       if (messageId !== null) {
-        this.api.queueEdit(this.groupId, messageId, "Lobby closed.", {});
+        this.api.queueEdit(this.groupId, messageId, this.msg.lobbyClosedText(), {});
       }
     } else {
       this.persist();
@@ -817,15 +850,15 @@ export class TableDO extends DurableObject<Bindings> {
     const now = Date.now();
     const lobby = this.state.lobby;
     if (!lobby) {
-      await this.failAction(context, user.id, messages.lobbyExpiredAlert(), false);
+      await this.failAction(context, user.id, this.msg.lobbyExpiredAlert(), false);
       return;
     }
     if (lobby.starterId === null || user.id !== lobby.starterId) {
-      await this.failAction(context, user.id, messages.onlyStarterAlert());
+      await this.failAction(context, user.id, this.msg.onlyStarterAlert());
       return;
     }
     if (lobby.playerIds.length < MIN_PLAYERS) {
-      lobby.error = "Need at least 2 players to deal.";
+      lobby.error = this.msg.needMorePlayersError();
       this.persist();
       await this.editLobbyMessage();
       if (context.callbackId) {
@@ -839,7 +872,7 @@ export class TableDO extends DurableObject<Bindings> {
       return player === null || player.balance < MIN_JOIN_BALANCE;
     });
     if (broke !== undefined) {
-      lobby.error = `${names.get(broke) ?? `user ${broke}`} doesn't have enough chips (needs ${MIN_JOIN_BALANCE}).`;
+      lobby.error = this.msg.playerBrokeError(names.get(broke) ?? `user ${broke}`);
       this.persist();
       await this.editLobbyMessage();
       if (context.callbackId) {
@@ -872,7 +905,7 @@ export class TableDO extends DurableObject<Bindings> {
     for (const event of started.events) {
       if (event.type === "hole_cards") {
         try {
-          await this.api.sendMessage(event.userId, messages.dmCardsText(state.handNo, event.cards));
+          await this.api.sendMessage(event.userId, this.msg.dmCardsText(state.handNo, event.cards));
         } catch (error) {
           console.error(
             JSON.stringify({
@@ -892,7 +925,7 @@ export class TableDO extends DurableObject<Bindings> {
       this.api.queueEdit(
         this.groupId,
         lobby.messageId,
-        messages.lobbyStartedText(state.handNo),
+        this.msg.lobbyStartedText(state.handNo),
         {},
       );
       try {
@@ -908,11 +941,11 @@ export class TableDO extends DurableObject<Bindings> {
   private async cancelLobby(user: TelegramUser, context: ActionContext): Promise<void> {
     const lobby = this.state.lobby;
     if (!lobby) {
-      await this.failAction(context, user.id, messages.lobbyExpiredAlert(), false);
+      await this.failAction(context, user.id, this.msg.lobbyExpiredAlert(), false);
       return;
     }
     if (lobby.starterId === null || user.id !== lobby.starterId) {
-      await this.failAction(context, user.id, messages.onlyStarterAlert());
+      await this.failAction(context, user.id, this.msg.onlyStarterAlert());
       return;
     }
     store.setMatchStatus(this.sql, lobby.matchId, "canceled", Date.now());
@@ -920,7 +953,7 @@ export class TableDO extends DurableObject<Bindings> {
     this.state.lobby = null;
     this.persist();
     if (messageId !== null) {
-      this.api.queueEdit(this.groupId, messageId, "Lobby canceled.", {});
+      this.api.queueEdit(this.groupId, messageId, this.msg.lobbyCanceledText(), {});
     }
     if (context.callbackId) {
       await this.api.answerCallbackQuery(context.callbackId);
@@ -930,11 +963,11 @@ export class TableDO extends DurableObject<Bindings> {
   private async takeover(user: TelegramUser, context: ActionContext): Promise<void> {
     const lobby = this.state.lobby;
     if (!lobby) {
-      await this.failAction(context, user.id, messages.lobbyExpiredAlert(), false);
+      await this.failAction(context, user.id, this.msg.lobbyExpiredAlert(), false);
       return;
     }
     if (lobby.starterId !== null || !lobby.playerIds.includes(user.id)) {
-      await this.failAction(context, user.id, messages.takeoverAlert(), false);
+      await this.failAction(context, user.id, this.msg.takeoverAlert(), false);
       return;
     }
     lobby.starterId = user.id;
@@ -960,7 +993,7 @@ export class TableDO extends DurableObject<Bindings> {
       this.api.queueEdit(
         this.groupId,
         messageId,
-        messages.lobbyText({
+        this.msg.lobbyText({
           names: new Map(),
           starterId: null,
           playerIds: [],
@@ -1002,27 +1035,30 @@ export class TableDO extends DurableObject<Bindings> {
     });
   }
 
-  private async postActivity(activity: messages.TableActivity): Promise<void> {
+  private async postActivity(activity: TableActivity): Promise<void> {
     const match = this.state.match;
     if (!match) {
       return;
     }
     const names = this.namesFor(match.players.map((player) => player.userId));
     const actor = match.actorUserId === null ? null : playerById(match, match.actorUserId);
-    const text = messages.activityText({ match, names, activity });
-    const keyboard = tableKeyboard({
-      matchId: match.matchId,
-      turnId: match.turnId,
-      state: match,
-      actor,
-    });
+    const text = this.msg.activityText({ match, names, activity });
+    const keyboard = tableKeyboard(
+      {
+        matchId: match.matchId,
+        turnId: match.turnId,
+        state: match,
+        actor,
+      },
+      this.msg.labels,
+    );
     await this.api.sendMessage(this.groupId, text, { reply_markup: keyboard });
   }
 
   private async completeActionEvents(
     state: MatchState,
     now: number,
-    activity: messages.TableActivity | null,
+    activity: TableActivity | null,
   ): Promise<boolean> {
     this.state.match = state;
     this.resetDeadlines(state, now);
@@ -1058,24 +1094,24 @@ export class TableDO extends DurableObject<Bindings> {
     const now = Date.now();
     const match = this.state.match;
     if (match?.status !== "active") {
-      await this.failAction(context, userId, messages.noMatchAlert());
+      await this.failAction(context, userId, this.msg.noMatchAlert());
       return;
     }
     const player = match.players.find((candidate) => candidate.userId === userId);
     if (!player) {
-      await this.failAction(context, userId, messages.notInMatchAlert());
+      await this.failAction(context, userId, this.msg.notInMatchAlert());
       return;
     }
     if (context.source === "callback") {
       if (context.matchId !== match.matchId || context.turnId !== match.turnId) {
-        await this.failAction(context, userId, messages.staleMoveAlert(), false);
+        await this.failAction(context, userId, this.msg.staleMoveAlert(), false);
         return;
       }
     }
     if (match.actorUserId !== userId) {
       const actorId = match.actorUserId as number;
       const actorName = this.namesFor([actorId]).get(actorId) as string;
-      await this.failAction(context, userId, messages.notYourTurnAlert(actorName));
+      await this.failAction(context, userId, this.msg.notYourTurnAlert(actorName));
       return;
     }
     let result: EngineResult;
@@ -1084,14 +1120,14 @@ export class TableDO extends DurableObject<Bindings> {
     } catch (error) {
       if (error instanceof EngineError) {
         if (error.code === "above_cap") {
-          await this.failAction(context, userId, messages.raiseCapAlert(maxRaiseTo(match, player)));
+          await this.failAction(context, userId, this.msg.raiseCapAlert(maxRaiseTo(match, player)));
           return;
         }
         if (error.code === "illegal_action" && error.message.includes("multiples of 10")) {
-          await this.failAction(context, userId, messages.amountMultipleAlert());
+          await this.failAction(context, userId, this.msg.amountMultipleAlert());
           return;
         }
-        await this.failAction(context, userId, messages.staleMoveAlert(), false);
+        await this.failAction(context, userId, this.msg.staleMoveAlert(), false);
         return;
       }
       throw error;
@@ -1148,7 +1184,7 @@ export class TableDO extends DurableObject<Bindings> {
     }
     const result = advanceRunout(match);
     const dealt = result.events.find((event) => event.type === "street_dealt");
-    const activity: messages.TableActivity | null =
+    const activity: TableActivity | null =
       dealt?.type === "street_dealt"
         ? { type: "street", street: dealt.street, cards: dealt.cards }
         : null;
@@ -1185,9 +1221,9 @@ export class TableDO extends DurableObject<Bindings> {
     this.state.runoutDeadlineAt = null;
     this.persist();
 
-    const text = messages.resultText(match, names, new Map());
+    const text = this.msg.resultText(match, names, new Map());
     const message = await this.api.sendMessage(this.groupId, text, {
-      reply_markup: resultKeyboard(match.matchId),
+      reply_markup: resultKeyboard(match.matchId, this.msg.labels),
     });
     if (message) {
       this.state.resultMessageId = message.message_id;
@@ -1233,9 +1269,9 @@ export class TableDO extends DurableObject<Bindings> {
     const match = this.state.match;
     if (match?.status !== "done") {
       if (callbackId) {
-        await this.api.answerCallbackQuery(callbackId, { text: messages.showNoneAlert() });
+        await this.api.answerCallbackQuery(callbackId, { text: this.msg.showNoneAlert() });
       } else {
-        await this.privateAlert(userId, messages.showNoneAlert());
+        await this.privateAlert(userId, this.msg.showNoneAlert());
       }
       return;
     }
@@ -1245,8 +1281,8 @@ export class TableDO extends DurableObject<Bindings> {
     } catch (error) {
       const text =
         error instanceof EngineError && error.code === "already_shown"
-          ? messages.showNoneAlert()
-          : messages.notInMatchAlert();
+          ? this.msg.showNoneAlert()
+          : this.msg.notInMatchAlert();
       if (callbackId) {
         await this.api.answerCallbackQuery(callbackId, { text });
       } else {
@@ -1267,9 +1303,9 @@ export class TableDO extends DurableObject<Bindings> {
       }
     }
     if (this.state.resultMessageId !== null) {
-      const text = messages.resultText(result.state, names, shown);
+      const text = this.msg.resultText(result.state, names, shown);
       this.api.queueEdit(this.groupId, this.state.resultMessageId, text, {
-        reply_markup: resultKeyboard(match.matchId),
+        reply_markup: resultKeyboard(match.matchId, this.msg.labels),
       });
     }
     await this.api.flushEdits();
@@ -1284,16 +1320,16 @@ export class TableDO extends DurableObject<Bindings> {
     if (player.last_daily_at !== null && now - player.last_daily_at < DAILY_COOLDOWN_MS) {
       await this.api.sendMessage(
         intent.chatId,
-        messages.dailyTooEarlyText(DAILY_COOLDOWN_MS - (now - player.last_daily_at)),
+        this.msg.dailyTooEarlyText(DAILY_COOLDOWN_MS - (now - player.last_daily_at)),
       );
       return;
     }
     store.adjustBalance(this.sql, player.user_id, DAILY_AMOUNT);
     store.setDaily(this.sql, player.user_id, now);
     const updated = store.getPlayer(this.sql, player.user_id);
-    await this.api.sendMessage(intent.chatId, messages.dailyClaimedText(updated?.balance ?? 0));
+    await this.api.sendMessage(intent.chatId, this.msg.dailyClaimedText(updated?.balance ?? 0));
     try {
-      await this.api.sendMessage(this.groupId, messages.dailyTeaserText(player.first_name));
+      await this.api.sendMessage(this.groupId, this.msg.dailyTeaserText(player.first_name));
     } catch (error) {
       console.error(
         JSON.stringify({ event: "daily_teaser_failed", error: safeErrorMessage(error) }),
@@ -1308,7 +1344,7 @@ export class TableDO extends DurableObject<Bindings> {
     }
     await this.api.sendMessage(
       chatId,
-      messages.balanceText(
+      this.msg.balanceText(
         {
           balance: player.balance,
           lastDailyAt: player.last_daily_at,
@@ -1330,7 +1366,7 @@ export class TableDO extends DurableObject<Bindings> {
     }
     await this.api.sendMessage(
       chatId,
-      messages.statsText(
+      this.msg.statsText(
         {
           balance: player.balance,
           lastDailyAt: player.last_daily_at,
@@ -1357,7 +1393,7 @@ export class TableDO extends DurableObject<Bindings> {
       hole: row.hole === null ? null : (JSON.parse(row.hole) as Card[]),
       board: row.board === null ? [] : (JSON.parse(row.board) as Card[]),
     }));
-    await this.api.sendMessage(chatId, messages.historyText(rows));
+    await this.api.sendMessage(chatId, this.msg.historyText(rows));
   }
 
   private async sendLeaderboard(chatId: number): Promise<void> {
@@ -1367,13 +1403,13 @@ export class TableDO extends DurableObject<Bindings> {
       .map((player) => ({ firstName: player.first_name, balance: player.balance }));
     await this.api.sendMessage(
       chatId,
-      messages.leaderboardText(rows, store.getMeta(this.sql, "group_title")),
+      this.msg.leaderboardText(rows, store.getMeta(this.sql, "group_title")),
     );
   }
 
   private async sendVersion(intent: CommandIntent): Promise<void> {
     if (intent.userId !== this.config.ownerUserId) {
-      await this.privateAlert(intent.userId, messages.ownerOnlyText());
+      await this.privateAlert(intent.userId, this.msg.ownerOnlyText());
       return;
     }
     const info = await this.api.call<{ url?: string; pending_update_count?: number }>(
@@ -1382,13 +1418,13 @@ export class TableDO extends DurableObject<Bindings> {
     );
     await this.api.sendMessage(
       intent.chatId,
-      messages.versionText("0.1.0", info.url ?? null, info.pending_update_count ?? 0),
+      this.msg.versionText("0.1.0", info.url ?? null, info.pending_update_count ?? 0),
     );
   }
 
   private async resetGroup(intent: CommandIntent): Promise<void> {
     if (intent.userId !== this.config.ownerUserId) {
-      await this.privateAlert(intent.userId, messages.ownerOnlyText());
+      await this.privateAlert(intent.userId, this.msg.ownerOnlyText());
       return;
     }
     const parts = intent.args.trim().split(/\s+/);
@@ -1396,37 +1432,31 @@ export class TableDO extends DurableObject<Bindings> {
       const target = Number(parts[1]);
       const pending = store.getMeta(this.sql, "reset_pending");
       if (pending === null || Number(pending) !== target) {
-        await this.api.sendMessage(
-          intent.chatId,
-          "Nothing pending. Run /resetgroup <chat_id> first.",
-        );
+        await this.api.sendMessage(intent.chatId, this.msg.nothingPendingText());
         return;
       }
       store.wipeGroup(this.sql);
       this.state = emptyState();
       this.persist();
-      await this.api.sendMessage(intent.chatId, messages.resetGroupDoneText(target));
+      await this.api.sendMessage(intent.chatId, this.msg.resetGroupDoneText(target));
       return;
     }
     const target = Number(parts[0]);
     if (!Number.isSafeInteger(target) || target !== this.groupId) {
-      await this.api.sendMessage(
-        intent.chatId,
-        `Usage: /resetgroup ${this.groupId} (then confirm)`,
-      );
+      await this.api.sendMessage(intent.chatId, this.msg.resetGroupUsageText(this.groupId));
       return;
     }
     store.setMeta(this.sql, "reset_pending", String(target));
-    await this.api.sendMessage(intent.chatId, messages.resetGroupConfirmText(target));
+    await this.api.sendMessage(intent.chatId, this.msg.resetGroupConfirmText(target));
   }
 
   private async dmCards(userId: number): Promise<void> {
     const match = this.state.match;
     const player = match?.players.find((candidate) => candidate.userId === userId);
     if (!match || !player?.hole) {
-      await this.privateAlert(userId, messages.cardsNoneAlert());
+      await this.privateAlert(userId, this.msg.cardsNoneAlert());
       return;
     }
-    await this.api.sendMessage(userId, messages.dmCardsText(match.handNo, player.hole));
+    await this.api.sendMessage(userId, this.msg.dmCardsText(match.handNo, player.hole));
   }
 }

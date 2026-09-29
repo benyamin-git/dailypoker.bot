@@ -42,7 +42,7 @@ type Action =
   | { kind: 'allin' };
 
 createMatch(input: { chatId: number; matchId: number; players: PlayerSeed[]; rng: Rng }): MatchState
-startHand(state: MatchState): { state: MatchState; events: Event[] }   // shuffle, order, deal, antes
+startHand(state: MatchState): { state: MatchState; events: Event[] }   // shuffle, order, deal, entries
 legalActions(state: MatchState, userId: number): Action[]
 applyAction(state: MatchState, userId: number, action: Action): { state: MatchState; events: Event[] }
 timeoutAction(state: MatchState): { state: MatchState; events: Event[] }  // check-or-fold

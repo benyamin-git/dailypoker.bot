@@ -21,6 +21,8 @@ export const GROUP_COMMANDS: BotCommand[] = [
   { command: "top", description: "Show the group leaderboard" },
   { command: "rules", description: "How Daily Poker works" },
   { command: "help", description: "List the commands" },
+  { command: "fa", description: "تغییر زبان به فارسی" },
+  { command: "en", description: "Switch the language to English" },
   { command: "ping", description: "Check that the bot is alive" },
 ];
 
@@ -33,4 +35,6 @@ export const PRIVATE_COMMANDS: BotCommand[] = [
   { command: "cards", description: "Re-send your hole cards" },
   { command: "rules", description: "How Daily Poker works" },
   { command: "help", description: "List the commands" },
+  { command: "fa", description: "تغییر زبان به فارسی" },
+  { command: "en", description: "Switch the language to English" },
 ];

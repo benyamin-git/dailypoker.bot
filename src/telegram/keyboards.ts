@@ -2,6 +2,7 @@ import { BET_MULTIPLE } from "../config";
 import { maxRaiseTo, minFullRaiseTo } from "../engine/hand";
 import type { MatchState, PlayerState } from "../engine/types";
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from "./api";
+import type { KeyboardLabels } from "./messages/types";
 
 export function callbackData(
   matchId: number,
@@ -14,30 +15,33 @@ export function callbackData(
     : `m:${matchId}:${turnId}:${action}:${amount}`;
 }
 
-export function lobbyKeyboard(options: {
-  matchId: number;
-  botUsername: string;
-  takeoverAvailable: boolean;
-}): InlineKeyboardMarkup {
+export function lobbyKeyboard(
+  options: {
+    matchId: number;
+    botUsername: string;
+    takeoverAvailable: boolean;
+  },
+  labels: KeyboardLabels,
+): InlineKeyboardMarkup {
   const rows: InlineKeyboardButton[][] = [
     [
-      { text: "Join", callback_data: callbackData(options.matchId, 0, "join") },
-      { text: "Leave", callback_data: callbackData(options.matchId, 0, "leave") },
+      { text: labels.join, callback_data: callbackData(options.matchId, 0, "join") },
+      { text: labels.leave, callback_data: callbackData(options.matchId, 0, "leave") },
     ],
   ];
   if (options.takeoverAvailable) {
     rows.push([
-      { text: "🙋 Take over", callback_data: callbackData(options.matchId, 0, "takeover") },
+      { text: labels.takeover, callback_data: callbackData(options.matchId, 0, "takeover") },
     ]);
   } else {
     rows.push([
-      { text: "🚀 Deal", callback_data: callbackData(options.matchId, 0, "deal") },
-      { text: "Cancel", callback_data: callbackData(options.matchId, 0, "cancel") },
+      { text: labels.deal, callback_data: callbackData(options.matchId, 0, "deal") },
+      { text: labels.cancel, callback_data: callbackData(options.matchId, 0, "cancel") },
     ]);
   }
   rows.push([
     {
-      text: "📬 Open bot",
+      text: labels.openBot,
       url: `https://t.me/${options.botUsername}?start=join_${options.matchId}`,
     },
   ]);
@@ -50,39 +54,50 @@ export interface RaiseOption {
   to?: number;
 }
 
-export function raiseOptions(state: MatchState, player: PlayerState): RaiseOption[] {
+export function raiseOptions(
+  state: MatchState,
+  player: PlayerState,
+  labels: KeyboardLabels,
+): RaiseOption[] {
   const options: RaiseOption[] = [];
   const maxTo = maxRaiseTo(state, player);
   if (state.currentBet === 0) {
     if (maxTo >= BET_MULTIPLE) {
-      options.push({ label: `Bet ${BET_MULTIPLE}`, kind: "bet", to: BET_MULTIPLE });
+      options.push({ label: labels.bet(BET_MULTIPLE), kind: "bet", to: BET_MULTIPLE });
     }
   } else {
     const minRaise = minFullRaiseTo(state, player);
     if (minRaise !== null) {
-      options.push({ label: `Min — to ${minRaise}`, kind: "raise", to: minRaise });
+      options.push({ label: labels.raiseMin(minRaise), kind: "raise", to: minRaise });
       const nextStep = minRaise + BET_MULTIPLE;
       if (nextStep <= maxTo) {
-        options.push({ label: `+${BET_MULTIPLE} — to ${nextStep}`, kind: "raise", to: nextStep });
+        options.push({
+          label: labels.raiseStep(BET_MULTIPLE, nextStep),
+          kind: "raise",
+          to: nextStep,
+        });
       }
     }
   }
   if (maxTo > state.currentBet && !options.some((option) => option.to === maxTo)) {
-    options.push({ label: `All-in — ${maxTo}`, kind: "allin", to: maxTo });
+    options.push({ label: labels.allIn(maxTo), kind: "allin", to: maxTo });
   }
-  options.push({ label: "✏️ Custom", kind: "custom" });
+  options.push({ label: labels.custom, kind: "custom" });
   return options;
 }
 
-export function tableKeyboard(options: {
-  matchId: number;
-  turnId: number;
-  state: MatchState;
-  actor: PlayerState | null;
-}): InlineKeyboardMarkup {
+export function tableKeyboard(
+  options: {
+    matchId: number;
+    turnId: number;
+    state: MatchState;
+    actor: PlayerState | null;
+  },
+  labels: KeyboardLabels,
+): InlineKeyboardMarkup {
   const { matchId, turnId, state, actor } = options;
   const cards: InlineKeyboardButton = {
-    text: "🂠 Cards",
+    text: labels.cards,
     callback_data: callbackData(matchId, turnId, "cards"),
   };
   if (!actor || state.status !== "active" || state.actorUserId === null) {
@@ -90,16 +105,16 @@ export function tableKeyboard(options: {
   }
   const toCall = Math.max(0, state.currentBet - actor.streetContribution);
   const row: InlineKeyboardButton[] = [
-    { text: "Fold", callback_data: callbackData(matchId, turnId, "fold") },
+    { text: labels.fold, callback_data: callbackData(matchId, turnId, "fold") },
   ];
   if (toCall === 0) {
-    row.push({ text: "Check", callback_data: callbackData(matchId, turnId, "check") });
+    row.push({ text: labels.check, callback_data: callbackData(matchId, turnId, "check") });
   } else {
-    row.push({ text: `Call ${toCall}`, callback_data: callbackData(matchId, turnId, "call") });
+    row.push({ text: labels.call(toCall), callback_data: callbackData(matchId, turnId, "call") });
   }
-  const raiseMenu = raiseOptions(state, actor).some((option) => option.to !== undefined);
+  const raiseMenu = raiseOptions(state, actor, labels).some((option) => option.to !== undefined);
   if (raiseMenu) {
-    row.push({ text: "Raise ▾", callback_data: callbackData(matchId, turnId, "raise") });
+    row.push({ text: labels.raise, callback_data: callbackData(matchId, turnId, "raise") });
   }
   row.push(cards);
   return { inline_keyboard: [row] };
@@ -120,12 +135,12 @@ export function raiseKeyboard(options: {
   return { inline_keyboard: [row] };
 }
 
-export function resultKeyboard(matchId: number): InlineKeyboardMarkup {
+export function resultKeyboard(matchId: number, labels: KeyboardLabels): InlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
-        { text: "Show my hand", callback_data: callbackData(matchId, 0, "show") },
-        { text: "🔁 Rematch", callback_data: callbackData(matchId, 0, "rematch") },
+        { text: labels.showHand, callback_data: callbackData(matchId, 0, "show") },
+        { text: labels.rematch, callback_data: callbackData(matchId, 0, "rematch") },
       ],
     ],
   };

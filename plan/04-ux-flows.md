@@ -84,7 +84,7 @@ Get chips with /daily (once per day, +200).
 
 ```
 🃏 Daily Poker — Lobby
-Ante 10 each · max 100 per hand · 2–9 players
+Entry 10 each · max 100 per hand · 2–9 players
 
 Can deal: Ali
 Joined (3): Ali, Reza, Sara
@@ -154,7 +154,7 @@ Out
 ⏭ Next: Ali — call 40 · 60s to act
 ```
 
-- `in N` is the player's total committed this hand (ante included); the numbers sum to the pot.
+- `in N` is the player's total committed this hand (entry included); the numbers sum to the pot.
 - All-in players show `all-in 100`; folded players move under `Out` (section omitted when
   nobody folded); live hands appear next to names once revealed.
 - The footer states the 60 s limit, not a live countdown: the timeout auto-action posts its own
