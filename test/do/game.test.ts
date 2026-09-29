@@ -361,6 +361,17 @@ describe("play by play", () => {
     const last = texts[texts.length - 1];
     expect(last).toBe(result);
   });
+
+  it("hides the winner's cards when everyone folds", async () => {
+    const calls = await startTwoPlayerHand();
+    calls.length = 0;
+    await tap((await getTableState()).match?.actorUserId as number, "fold");
+    const done = await getTableState();
+    expect(done.match?.status).toBe("done");
+    const result = groupTexts(calls).find((text) => text.includes("🏆"));
+    expect(result).toBeDefined();
+    expect(result).not.toMatch(/[♠♥♦♣]/);
+  });
 });
 
 describe("full hands", () => {

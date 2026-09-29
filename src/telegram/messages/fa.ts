@@ -285,7 +285,10 @@ export const fa: Messages = {
       }${formatAmount(delta)})</b>`;
     }
     const winnerCards = match.winners
-      .map((id) => match.players.find((player) => player.userId === id)?.hole)
+      .map((id) => {
+        const player = match.players.find((candidate) => candidate.userId === id);
+        return player?.shown ? player.hole : undefined;
+      })
       .filter((hole): hole is [Card, Card] => hole !== undefined);
     if (winnerCards.length > 0) {
       line += ` — ${winnerCards.map((hole) => cardsText(hole)).join(" / ")}`;
