@@ -95,6 +95,35 @@ Admin routes (all require `x-admin-key`):
 
 Rollback: `bunx wrangler rollback --env <env>` (Cloudflare keeps recent versions).
 
+### Operating from Iran (dev machine)
+
+Findings from the first dev deploy (2026-09-29), all confirmed on the owner's network:
+
+- `*.workers.dev` is unreachable from the dev machine: DNS resolves (local resolver and
+  Cloudflare DoH both answer), but HTTPS times out on IPv4 and IPv6. Telegram → Worker
+  delivery is unaffected (Telegram connects to Cloudflare's edge, not to the dev machine).
+- Wrangler API traffic (deploy, secrets, KV, schedules) works fine with
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; the dashboard may need a VPN.
+- `wrangler dev --remote` is unusable from here: the preview tunnel drops every request
+  ("Network connection lost"), and SQLite-backed DOs are local-mode only anyway.
+- `wrangler tail` cannot hold its connection (keep-alive ping lost).
+- A Worker subrequest to another Worker of the **same account** on `*.workers.dev` fails
+  (HTTP 404 body / `error code: 1042`).
+
+Consequence: the admin `curl` commands above cannot be run from the dev machine. When
+webhook registration must happen before the owner can test, use the edge-side helper pattern:
+
+1. Deploy a throwaway cron Worker in a scratch directory (`crons: ["* * * * *"]`) that calls
+   `api.telegram.org` directly (`setWebhook`, `setMyCommands`, `getWebhookInfo`) using the
+   same values, and writes the JSON responses to a temporary KV namespace.
+2. Read the results with
+   `bunx wrangler kv key get state --namespace-id <id> --remote` — `--remote` is required,
+   the KV commands default to local storage.
+3. Delete the helper Worker and the KV namespace.
+
+Alternative: run the same `curl` calls from any network that can reach `*.workers.dev`
+(VPN, phone hotspot), or add a thin dashboard/API path later.
+
 ## Request path
 
 1. Telegram POSTs an update to `/tg/<secret-path>`.

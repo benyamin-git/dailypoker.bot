@@ -91,10 +91,15 @@ Implementation starts only after the owner approves this plan.
 - [ ] First live hand played in the real group; zero errors in `wrangler tail`. (owner)
 - [ ] `v0.1.0` tag on GitHub (no LICENSE — see `01-decisions.md` R2). (after the first live hand)
 
-**Implementation notes (2026-09-28):** code, README (self-host runbook, commands reference,
+**Implementation notes (2026-09-29):** code, README (self-host runbook, commands reference,
 security notes), ToS check (`07-security.md §7`) and admin-route tests (register/set-commands/
-webhook-info) are done. The three remaining boxes require the owner's BotFather + Cloudflare
-credentials; `01-decisions.md` has the amendment log (A1–A6) and milestone status.
+webhook-info) are done. The **dev environment is deployed and live**: secrets uploaded, vars
+set, `setWebhook` + `setMyCommands` succeeded against the real bot, and Telegram accepted the
+webhook (see `02-hosting.md` → *Operating from Iran* for the network workaround used).
+Remaining: the three boxes below need the owner to play a hand in the group; `v0.1.0` tag
+follows that. Production deploy additionally needs either a second BotFather bot or
+re-pointing the webhook to the prod Worker (one bot = one webhook). Owner ids and group ids
+live only in the gitignored `.dev.vars`; never commit them.
 
 ---
 
