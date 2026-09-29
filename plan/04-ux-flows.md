@@ -115,7 +115,7 @@ available`).
 ```
 🚀 Hand #7 — Reza acts first
 
-🃏 Hand #7 — Preflop · 💰 Pot 30 (30 ante) · cap 100
+🃏 Hand #7 — Preflop · 💰 Pot 30 · cap 100
 
 Still in
 👤 Ali — in 10
@@ -140,7 +140,8 @@ Still in
 **Body and footer**
 
 ```
-🃏 Hand #7 — Flop · 💰 Pot 90 (30 ante + 60 bets) · cap 100
+🃏 Hand #7 — Flop · 💰 Pot 90 · cap 100
+
 Board: A♠ K♦ 7♣ — —          ← board line omitted before the flop
 
 Still in

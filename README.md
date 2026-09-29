@@ -13,7 +13,8 @@ and the last line says who is next.
 ```
 🔥 Reza raises to 40
 
-🃏 Hand #12 — Flop · 💰 Pot 210 (40 ante + 170 bets) · cap 100
+🃏 Hand #12 — Flop · 💰 Pot 210 · cap 100
+
 Board: A♠ K♦ 7♣ — —
 
 Still in

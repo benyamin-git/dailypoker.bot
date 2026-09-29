@@ -207,20 +207,14 @@ function boardText(board: readonly Card[]): string | null {
 }
 
 function stateLines(match: MatchState, names: Map<number, string>): string[] {
-  const anteTotal = ANTE * match.players.length;
-  const bets = match.pot - anteTotal;
-  const potDetail =
-    bets > 0
-      ? `💰 Pot ${formatAmount(match.pot)} (${formatAmount(anteTotal)} ante + ${formatAmount(
-          bets,
-        )} bets)`
-      : `💰 Pot ${formatAmount(match.pot)} (${formatAmount(anteTotal)} ante)`;
   const lines = [
-    `🃏 Hand #${match.handNo} — ${STREET_LABEL[match.street]} · ${potDetail} · cap ${CAP}`,
+    `🃏 Hand #${match.handNo} — ${STREET_LABEL[match.street]} · 💰 Pot ${formatAmount(
+      match.pot,
+    )} · cap ${CAP}`,
   ];
   const board = boardText(match.board);
   if (board) {
-    lines.push(board);
+    lines.push("", board);
   }
   const seated = match.order
     .map((userId) => match.players.find((player) => player.userId === userId))
