@@ -1,14 +1,24 @@
 # dailypoker.bot
 
-A private Telegram poker bot for a friend group: one hand of No-Limit Texas Hold'em per day,
-played entirely with inline buttons inside a Telegram group. Play chips only — no payments, no
-transfers, no real-money stakes.
+dailypoker.bot is a private Telegram bot that runs No-Limit Texas Hold'em in a group chat. One
+hand is played at a time; each action is posted as a group message and each control is an inline
+button. Hole cards and personal stats are sent by DM. Chips are play money: there are no payments
+and no chip transfers between players.
 
-Runs 100% on the Cloudflare Workers free plan (Worker + one SQLite-backed Durable Object per
-group). No servers, no tunnels, no web UI for players.
+It runs entirely on the Cloudflare Workers free plan, as one Worker plus a SQLite-backed Durable
+Object per Telegram group. There is no player-facing web UI and no home server to keep running.
 
-Every action gets its own group message: the action is the headline, the table state follows,
-and the last line says who is next.
+> Single-tenant by design. A deployment serves one allowlisted Telegram group with its own bot
+> token. English is the default language; a group can switch to Persian with `/fa`.
+
+The group chat is the table: results, banter and the leaderboard stay in the group, while hidden
+information goes to DM. Keeping the game in the existing chat, at friend-group scale, is the
+point — it needs no server to stay up and no player has to leave Telegram.
+
+## What it looks like
+
+Every action is a new group message: the action on top, the table state below it, and whose turn
+is next on the last line.
 
 ```
 🔥 Beny raises to 40
@@ -30,25 +40,28 @@ Out
 [ Fold ] [ Call 20 ] [ Raise ▾ ] [ 🂠 Cards ]
 ```
 
-> The mocks in this README are text stand-ins for the real Telegram messages.
+*This is an illustration of the message layout using the bot's own templates. It was not captured
+from a live chat.*
 
 ## Ruleset
 
-One hand per day, triggered by a player with `/newmatch` in the group. Classic No-Limit
-Hold'em with fixed blinds, a short clock, and simplification-first choices:
+One hand is one match. A player opens a lobby with `/newmatch`, others join, and the starter
+deals. Each group keeps its own balances and history.
 
-| Rule | v1 |
+| Rule | Value |
 |---|---|
-| Table size | 2–9 players |
-| Stacks | 100 max in per hand (the entry counts toward it); balances adjust by hand result |
-| Entry | 10 each, posted at the deal (no blinds) |
-| Buy-in | one hand at a time; rejoin next hand |
-| Turn timer | 60 seconds, then auto check/fold |
-| Raise rule | min-raise increments, bet sizes are multiples of 10 |
-| All-in | short all-in does not reopen the action for players who already acted |
-| Side pots | full side-pot handling with split-pot remainders |
-| Daily chips | `/daily` in DM grants 200 chips once per rolling 24 h |
-| Bankruptcy | broke players can still join hands (all-in for what they have); `/daily` tops them up |
+| Players | 2–9 |
+| Entry | 10 chips each, posted at the deal (no blinds) |
+| Cap | 100 chips contributed per player per hand, entry included |
+| All-in | a player is all-in when their contribution reaches the cap |
+| Minimum raise | matches the previous raise; bets and raises are multiples of 10 |
+| Turn timer | 60 seconds; timeout checks when checking is free, otherwise folds |
+| Split pots | divided evenly, with the remainder going to the earliest hand position |
+| Join requirement | at least 100 chips |
+| Daily chips | `/daily` in DM grants 200 chips with a 24-hour cooldown |
+
+There are no side pots: every player has the same 100-chip effective stack, so a single pot is
+always sufficient.
 
 ## Commands
 
@@ -56,84 +69,81 @@ Group:
 
 | Command | Who | What |
 |---|---|---|
-| `/newmatch` | anyone | open the lobby |
-| `/join`, `/leave` | anyone | enter/exit the lobby |
-| `/deal`, `/cancel` | starter | start the hand / cancel the lobby |
-| `/top` | anyone | group leaderboard |
-| `/rules` | anyone | rules summary in chat |
-| `/fa`, `/en` | anyone | switch the bot language (Persian/English) |
+| `/newmatch` | anyone | open a lobby |
+| `/join`, `/leave` | anyone | enter or exit the lobby |
+| `/deal`, `/cancel` | starter | start the hand or cancel the lobby |
+| `/takeover` | anyone | become the starter |
+| `/fold`, `/check`, `/call`, `/allin` | the player on turn | betting actions |
+| `/raise <amount>` | the player on turn | raise; the amount is a multiple of 10 |
+| `/show` | a player | reveal a mucked hand |
+| `/cards` | anyone | re-send your hole cards by DM |
+| `/balance` | anyone | your chip balance |
+| `/top` | anyone | group leaderboard (top five with a positive balance) |
+| `/rules`, `/help` | anyone | rules summary and command list |
+| `/fa`, `/en` | anyone | switch the bot language |
 | `/ping` | anyone | liveness check |
 
 Private chat (DM):
 
 | Command | What |
 |---|---|
-| `/start` | join onboarding + deep links |
-| `/daily` | claim 200 chips (rolling 24 h cooldown) |
-| `/balance` | your bankroll |
-| `/stats` | hands, wins, net |
-| `/history [n]` | last n hands (default 5, max 20) |
-| `/cards` | your hole cards for the current hand |
-| `/rules` | full rules |
-| `/fa`, `/en` | switch the bot language (Persian/English) |
+| `/start` | welcome and join links |
+| `/daily` | claim 200 chips |
+| `/balance`, `/stats`, `/history [n]` | balance, record, and last hands |
+| `/cards` | re-send your hole cards |
+| `/rules`, `/help` | rules and command list |
+| `/fa`, `/en` | switch the bot language |
 
-The language is a per-group setting: `/fa` or `/en` from the group (or from DM) switches every
-group message, button and DM for that group's table. English is the default.
+`/history` defaults to five hands and accepts up to 20. The language is a per-group setting
+persisted in the Durable Object; `/fa` or `/en` from the group or DM switches every group message,
+button and DM for that group's table.
 
-Owner only: `/version`, `/resetgroup` — the latter replies in DM with a reset button; tap it, then
-type `RESET` to wipe the group's players, balances and history.
+Owner commands are DM-only: `/version` reports the bot version and webhook status, and
+`/resetgroup` replies with a button, then requires typing `RESET` to wipe the group's players,
+balances and history.
 
-## Self-hosting quick start
+## Self-hosting
 
 Requirements: [Bun](https://bun.sh), a Cloudflare account (free plan), and a bot token from
 [@BotFather](https://t.me/BotFather).
 
-<details>
-<summary><strong>1. Create the Telegram bot</strong></summary>
+### 1. Create the bot
 
-In BotFather: `/newbot` → pick a name and username (e.g. `DailyPokerBot`) → save the token.
-Recommended settings:
+In BotFather: `/newbot` to pick a name and username (for example `DailyPokerBot`) and save the
+token. Disable privacy mode with `/setprivacy` → **Disable**, so the bot can read group commands.
+Optionally set the description and user picture. Add the bot to the group and open a DM with it,
+because hole cards are delivered there.
 
-- `/setdescription`, `/setabouttext`, `/setuserpic` (optional)
-- `/setprivacy` → **Disable** (the bot must see group messages to handle commands)
-- Add the bot to your group and grant it **delete messages** (needed for cleanup)
-
-</details>
-
-<details>
-<summary><strong>2. Deploy the Worker</strong></summary>
+### 2. Configure and deploy
 
 ```bash
 bun install
 bunx wrangler login           # or export CLOUDFLARE_API_TOKEN
 
-bunx wrangler secret put BOT_TOKEN      # --env dev for the dev worker
-bunx wrangler secret put WEBHOOK_SECRET # random 32+ bytes, e.g. openssl rand -hex 32
-bunx wrangler secret put ADMIN_KEY      # random, protects /admin/*
+bunx wrangler secret put BOT_TOKEN --env dev
+bunx wrangler secret put WEBHOOK_SECRET --env dev   # random 32+ bytes, e.g. openssl rand -hex 32
+bunx wrangler secret put ADMIN_KEY --env dev         # random, guards /admin/* routes
 ```
 
-Non-secret config is passed at deploy time (the committed `wrangler.jsonc` keeps placeholders
-only):
+`wrangler.jsonc` keeps placeholder values only. Pass the real non-secret configuration at deploy
+time:
 
 ```bash
-bunx wrangler deploy \
+bunx wrangler deploy --env dev \
   --var ALLOWED_CHAT_IDS:<your-group-chat-id> \
   --var OWNER_USER_ID:<your-telegram-user-id> \
   --var BOT_USERNAME:<your-bot-username> \
   --var WEBHOOK_PATH:<random-hex>
 ```
 
-To find the group chat id and your user id, add the bot to the group first and check the
-`wrangler tail` logs, or use a helper bot like `@userinfobot`. Group ids are negative and start
-with `-100`.
+Group ids are negative and start with `-100`; a helper bot such as `@userinfobot` reports both the
+group id and your user id. For the live worker, use `--env production` (`bun run deploy:prod`);
+`bun run deploy:dev` and `bun run deploy:prod` wrap `wrangler deploy` for the two environments.
 
-</details>
+### 3. Register the webhook
 
-<details>
-<summary><strong>3. Register the webhook (from the Worker itself)</strong></summary>
-
-If `api.telegram.org` is unreachable from your machine, let the Worker register the webhook for
-you (also configures the command menu):
+The Worker can register its own webhook, which is useful when `api.telegram.org` is unreachable
+from your machine. The calls also install the command menu:
 
 ```bash
 curl -sS -X POST "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/register-webhook" \
@@ -142,63 +152,54 @@ curl -sS -X POST "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/a
   -H "x-admin-key: $ADMIN_KEY"
 ```
 
-Check status anytime:
+Check status with `/admin/webhook-info`, and remove the webhook with `/admin/delete-webhook`
+(POST). All admin routes use the same `x-admin-key` header.
 
-```bash
-curl -sS "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/webhook-info" \
-  -H "x-admin-key: $ADMIN_KEY"
-```
+### 4. Play
 
-</details>
-
-<details>
-<summary><strong>4. Play</strong></summary>
-
-1. Add the bot to the group (it must be allowlisted, else it replies once and goes silent).
-2. `/newmatch` → everyone taps **Join** → starter taps **Deal**.
-3. Every check, call, bet, raise, fold and timeout posts a fresh message with the action on
-   top and whose turn it is at the bottom; hole cards arrive in DM.
+1. Add the bot to the group. Chat ids must be in `ALLOWED_CHAT_IDS`; otherwise the bot replies
+   once and stays silent.
+2. `/newmatch` → everyone taps **Join** → the starter taps **Deal**.
+3. Each action posts a fresh message; hole cards arrive in DM.
 4. After the hand, the result message offers **Show** and **Rematch**.
 
-</details>
-
-A dev environment (`--env dev`) mirrors production with its own bot, allowlist and worker;
-`EFFECTS_ENABLED=false` turns the dice effects off for quiet dev testing.
-
-### Configuration reference
+### Configuration
 
 | Name | Kind | Purpose |
 |---|---|---|
 | `BOT_TOKEN` | secret | BotFather token |
-| `WEBHOOK_SECRET` | secret | `X-Telegram-Bot-Api-Secret-Token` value for the webhook |
-| `ADMIN_KEY` | secret | guards `/admin/*` routes |
-| `ALLOWED_CHAT_IDS` | var | comma-separated group ids (v1: exactly one) |
+| `WEBHOOK_SECRET` | secret | `X-Telegram-Bot-Api-Secret-Token` value for the webhook (16+ chars) |
+| `ADMIN_KEY` | secret | guards the `/admin/*` routes (16+ chars) |
+| `ALLOWED_CHAT_IDS` | var | comma-separated group ids; exactly one is accepted |
 | `OWNER_USER_ID` | var | numeric Telegram id for owner commands |
 | `BOT_USERNAME` | var | used in `t.me/<bot>` deep links |
-| `WEBHOOK_PATH` | var | random path segment for the webhook (defense in depth) |
+| `WEBHOOK_PATH` | var | random path segment for the webhook (8+ chars) |
 | `EFFECTS_ENABLED` | var | `true`/`false` — Telegram dice effects on hand end |
+
+A dev environment (`--env dev`) mirrors production with its own bot, allowlist and worker.
+`EFFECTS_ENABLED=false` turns the dice effects off for quiet testing.
 
 ## Development
 
 ```bash
 bun install
-bun run dev          # local worker + DOs (wrangler dev, no Telegram network)
-bun run test         # vitest: unit (node) + workers (miniflare) projects
+bun run dev          # wrangler dev --env dev: local Worker and Durable Objects
+bun run test         # vitest: unit, workers, and workers-noeffects projects
+bun run test:unit    # node-only unit tests
+bun run test:workers # Miniflare tests for the Worker and TableDO
+bun run test:heavy   # TEST_HEAVY=1 oracle test against pokersolver
 bun run typecheck    # tsc --noEmit
-bun run lint         # biome check
-bun run format       # biome check --write
+bun run lint         # biome check .
+bun run format       # biome format --write .
 ```
 
-Tests in `test/engine/` run the pure engine (including a heavy `TEST_HEAVY=1` oracle against
-`pokersolver`); `test/do/` boots the real Worker + TableDO in Miniflare with a mocked Telegram
-transport; `test/noeffects/` runs the same DO with `EFFECTS_ENABLED=false`.
+Tests in `test/engine/`, `test/game/`, `test/telegram/` and `test/util/` run in Node;
+`test/do/` boots the real Worker and TableDO in Miniflare with a mocked Telegram transport;
+`test/noeffects/` runs the same Durable Object with `EFFECTS_ENABLED=false`.
 
-User-facing strings live in `src/telegram/messages/`: one catalogue per language (`en.ts`,
-`fa.ts`) implementing a shared `Messages` interface, with `/fa` and `/en` toggling the group's
-choice (persisted in the Durable Object's `meta` table).
-
-The engine (`src/engine/`) is deliberately import-free from the rest of the codebase — a
-purity test enforces it — so it can be reused and audited standalone.
+User-facing strings live in `src/telegram/messages/`, one catalogue per language (`en.ts`,
+`fa.ts`) behind a shared `Messages` interface. The engine in `src/engine/` imports nothing from
+the rest of the codebase; a purity test enforces that, so it can be audited standalone.
 
 Local secrets live in `.dev.vars` (gitignored; see `.dev.vars.example`).
 
@@ -210,7 +211,7 @@ Telegram ──webhook──▶ Worker (src/index.ts)
                         ▼
                TableDO (one per group, src/game/table-do.ts)
                  ├─ pure engine (src/engine/)
-                 ├─ SQLite: players, matches, stats
+                 ├─ SQLite: players, matches, stats (src/game/store.ts)
                  ├─ turn alarm (60 s)
                  └─ throttled Telegram sender (src/telegram/)
 ```
@@ -219,14 +220,15 @@ All game state lives in the Durable Object; the Worker is a thin router.
 
 ## Security notes
 
-- This is a **play-money** game: no payments, no chip transfers between players, no
-  real-value settlement.
-- Secrets are never committed; `.dev.vars` is gitignored; only placeholders ship in the repo.
-- The webhook is protected by a secret header (constant-time compare) and a random path.
-- All user-facing strings are HTML-escaped; callbacks validate actor, match, turn and action
-  server-side.
-- Data retention: hand history is pruned to the newest 1,000 matches per group; the owner can
-  wipe all group data from DM (`/resetgroup` → button → type `RESET`).
+- This is a play-money game: no payments, no chip transfers between players, no real-value
+  settlement.
+- Secrets are never committed; `.dev.vars` is gitignored, and only placeholders ship in the repo.
+- The webhook is protected by a secret header (constant-time compare) and a random path; the
+  admin routes use a separate constant-time key check.
+- User-facing strings are HTML-escaped, and callbacks validate actor, match, turn and action
+  server-side. Updates are deduplicated by `update_id`.
+- Hand history is pruned to the newest 1,000 matches per group. The owner can wipe all group data
+  from DM with `/resetgroup`.
 
 ## License
 
