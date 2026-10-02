@@ -193,9 +193,10 @@ bun run lint         # biome check .
 bun run format       # biome format --write .
 ```
 
-Tests in `test/engine/`, `test/game/`, `test/telegram/` and `test/util/` run in Node;
+Tests in `test/engine/`, `test/telegram/` and `test/util/` run in Node;
 `test/do/` boots the real Worker and TableDO in Miniflare with a mocked Telegram transport;
 `test/noeffects/` runs the same Durable Object with `EFFECTS_ENABLED=false`.
+`test/types/` holds only the ambient `pokersolver` type declaration used by the oracle test.
 
 User-facing strings live in `src/telegram/messages/`, one catalogue per language (`en.ts`,
 `fa.ts`) behind a shared `Messages` interface. The engine in `src/engine/` imports nothing from
