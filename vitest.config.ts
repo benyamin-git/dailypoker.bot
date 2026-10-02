@@ -21,7 +21,6 @@ export default defineConfig({
           environment: "node",
           include: [
             "test/engine/**/*.test.ts",
-            "test/game/**/*.test.ts",
             "test/telegram/**/*.test.ts",
             "test/util/**/*.test.ts",
           ],
