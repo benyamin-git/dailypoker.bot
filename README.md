@@ -138,8 +138,8 @@ bun run deploy:prod   # wrangler deploy --env production
 ```
 
 Group ids are negative and start with `-100`; a helper bot such as `@userinfobot` reports both the
-group id and your user id. The `production` env block keeps placeholders until the production
-worker is created — set its real values before the first `bun run deploy:prod`.
+group id and your user id. Both env blocks in `wrangler.jsonc` ship filled with the values for this
+deployment; replace them with your own before deploying.
 
 ### 3. Register the webhook
 
@@ -225,7 +225,7 @@ All game state lives in the Durable Object; the Worker is a thin router.
 
 - This is a play-money game: no payments, no chip transfers between players, no real-value
   settlement.
-- Secrets are never committed; `.dev.vars` is gitignored, and only placeholders ship in the repo.
+- Secrets are never committed; `.dev.vars` is gitignored, and `wrangler.jsonc` holds only non-secret vars.
 - The webhook is protected by a secret header (constant-time compare) and a random path; the
   admin routes use a separate constant-time key check.
 - User-facing strings are HTML-escaped, and callbacks validate actor, match, turn and action

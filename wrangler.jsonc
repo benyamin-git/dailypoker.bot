@@ -21,7 +21,6 @@
         "WEBHOOK_PATH": "cb466b8f84dae489f4e2356008b598a0"
       }
     },
-    // Production does not exist yet: set the real values here before the first deploy.
     "production": {
       "name": "dailypokerbot",
       "durable_objects": {
@@ -29,10 +28,10 @@
       },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TableDO"] }],
       "vars": {
-        "ALLOWED_CHAT_IDS": "-1000000000000",
-        "OWNER_USER_ID": "123456789",
-        "BOT_USERNAME": "dailypoker_bot",
-        "WEBHOOK_PATH": "replace-with-random-hex"
+        "ALLOWED_CHAT_IDS": "-1003385011529",
+        "OWNER_USER_ID": "6757766821",
+        "BOT_USERNAME": "daily_poker_bot",
+        "WEBHOOK_PATH": "7c5c070ff08b3795dd3642bfdd684b25"
       }
     }
   }
