@@ -21,23 +21,23 @@ Every action is a new group message: the action on top, the table state below it
 is next on the last line.
 
 ```
-🔥 Beny raises to 40
+Beny raises to 40
 
-🃏 Hand #12 — Flop · 💰 Pot 210 · cap 100
+Hand #12 — Flop · Pot 210 · cap 100
 
 Board: A♠ K♦ 7♣ — —
 
 Still in
-👤 Ali — in 40
-👤 Beny — in 60
-🚨 Mani — all-in 100 — Q♠ Q♦
+Ali — in 40
+Beny — in 60
+Mani — all-in 100 — Q♠ Q♦
 
 Out
-✖ Rasa — in 10
+Rasa — in 10
 
-⏭ Next: Ali — call 20 · 60s to act
+Next: Ali — call 20 · 60s to act
 
-[ Fold ] [ Call 20 ] [ Raise ▾ ] [ 🂠 Cards ]
+[ Fold ] [ Call 20 ] [ Raise ▾ ] [ Cards ]
 ```
 
 *This is an illustration of the message layout using the bot's own templates. It was not captured
@@ -125,25 +125,27 @@ bunx wrangler secret put WEBHOOK_SECRET --env dev   # random 32+ bytes, e.g. ope
 bunx wrangler secret put ADMIN_KEY --env dev         # random, guards /admin/* routes
 ```
 
-`wrangler.jsonc` keeps placeholder values only. Pass the real non-secret configuration at deploy
-time:
+Secrets never live in the repo; local development reads them from `.dev.vars` (see
+`.dev.vars.example`, gitignored). For the same three secrets on a deployed Worker, use the
+`wrangler secret put` calls above per environment.
+
+All non-secret configuration is a plain var in the `env.<name>.vars` block of `wrangler.jsonc`
+— edit the values there before deploying, then simply deploy:
 
 ```bash
-bunx wrangler deploy --env dev \
-  --var ALLOWED_CHAT_IDS:<your-group-chat-id> \
-  --var OWNER_USER_ID:<your-telegram-user-id> \
-  --var BOT_USERNAME:<your-bot-username> \
-  --var WEBHOOK_PATH:<random-hex>
+bun run deploy:dev    # wrangler deploy --env dev
+bun run deploy:prod   # wrangler deploy --env production
 ```
 
 Group ids are negative and start with `-100`; a helper bot such as `@userinfobot` reports both the
-group id and your user id. For the live worker, use `--env production` (`bun run deploy:prod`);
-`bun run deploy:dev` and `bun run deploy:prod` wrap `wrangler deploy` for the two environments.
+group id and your user id. The `production` env block keeps placeholders until the production
+worker is created — set its real values before the first `bun run deploy:prod`.
 
 ### 3. Register the webhook
 
 The Worker can register its own webhook, which is useful when `api.telegram.org` is unreachable
-from your machine. The calls also install the command menu:
+from your machine. The calls also install the command menu. `WEBHOOK_PATH` is the value from your
+`wrangler.jsonc` env block (the command below assumes it is exported in the shell):
 
 ```bash
 curl -sS -X POST "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/register-webhook" \
@@ -165,6 +167,9 @@ Check status with `/admin/webhook-info`, and remove the webhook with `/admin/del
 
 ### Configuration
 
+Secrets are set per environment with `wrangler secret put` (or `.dev.vars` for `wrangler dev`);
+the four vars below live in the matching `env.<name>.vars` block of `wrangler.jsonc`.
+
 | Name | Kind | Purpose |
 |---|---|---|
 | `BOT_TOKEN` | secret | BotFather token |
@@ -174,17 +179,15 @@ Check status with `/admin/webhook-info`, and remove the webhook with `/admin/del
 | `OWNER_USER_ID` | var | numeric Telegram id for owner commands |
 | `BOT_USERNAME` | var | used in `t.me/<bot>` deep links |
 | `WEBHOOK_PATH` | var | random path segment for the webhook (8+ chars) |
-| `EFFECTS_ENABLED` | var | `true`/`false` — Telegram dice effects on hand end |
 
 A dev environment (`--env dev`) mirrors production with its own bot, allowlist and worker.
-`EFFECTS_ENABLED=false` turns the dice effects off for quiet testing.
 
 ## Development
 
 ```bash
 bun install
 bun run dev          # wrangler dev --env dev: local Worker and Durable Objects
-bun run test         # vitest: unit, workers, and workers-noeffects projects
+bun run test         # vitest: unit and workers projects
 bun run test:unit    # node-only unit tests
 bun run test:workers # Miniflare tests for the Worker and TableDO
 bun run test:heavy   # TEST_HEAVY=1 oracle test against pokersolver
@@ -194,8 +197,7 @@ bun run format       # biome format --write .
 ```
 
 Tests in `test/engine/`, `test/telegram/` and `test/util/` run in Node;
-`test/do/` boots the real Worker and TableDO in Miniflare with a mocked Telegram transport;
-`test/noeffects/` runs the same Durable Object with `EFFECTS_ENABLED=false`.
+`test/do/` boots the real Worker and TableDO in Miniflare with a mocked Telegram transport.
 `test/types/` holds only the ambient `pokersolver` type declaration used by the oracle test.
 
 User-facing strings live in `src/telegram/messages/`, one catalogue per language (`en.ts`,

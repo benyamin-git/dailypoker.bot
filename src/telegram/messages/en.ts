@@ -37,29 +37,29 @@ function headline(view: ActivityView): string {
     case "start": {
       const first = view.match.actorUserId;
       const name = first === null ? "—" : nameOf(names, first);
-      text = `🚀 Hand #${view.match.handNo} — ${name} acts first`;
+      text = `Hand #${view.match.handNo} — ${name} acts first`;
       break;
     }
     case "action": {
       const name = nameOf(names, activity.userId);
       switch (activity.kind) {
         case "fold":
-          text = `❌ ${name} folds`;
+          text = `${name} folds`;
           break;
         case "check":
-          text = `✅ ${name} checks`;
+          text = `${name} checks`;
           break;
         case "call":
-          text = `📞 ${name} calls ${formatAmount(activity.to ?? 0)}`;
+          text = `${name} calls ${formatAmount(activity.to ?? 0)}`;
           break;
         case "bet":
-          text = `🔥 ${name} bets ${formatAmount(activity.to ?? 0)}`;
+          text = `${name} bets ${formatAmount(activity.to ?? 0)}`;
           break;
         case "raise":
-          text = `🔥 ${name} raises to ${formatAmount(activity.to ?? 0)}`;
+          text = `${name} raises to ${formatAmount(activity.to ?? 0)}`;
           break;
         case "allin":
-          text = `🚨 ${name} is all-in — ${formatAmount(activity.to ?? 0)}`;
+          text = `${name} is all-in — ${formatAmount(activity.to ?? 0)}`;
           break;
       }
       break;
@@ -67,11 +67,11 @@ function headline(view: ActivityView): string {
     case "timeout": {
       const name = nameOf(names, activity.userId);
       const verb = activity.kind === "check" ? "checked" : "folded";
-      text = `⏰ ${name} timed out — ${verb}`;
+      text = `${name} timed out — ${verb}`;
       break;
     }
     case "street":
-      text = `🎲 ${STREET_LABEL[activity.street]}: ${cardsText(activity.cards)}`;
+      text = `${STREET_LABEL[activity.street]}: ${cardsText(activity.cards)}`;
       break;
   }
   return text;
@@ -79,7 +79,7 @@ function headline(view: ActivityView): string {
 
 function stateLines(match: MatchState, names: Map<number, string>): string[] {
   const lines = [
-    `🃏 Hand #${match.handNo} — ${STREET_LABEL[match.street]} · 💰 Pot ${formatAmount(
+    `Hand #${match.handNo} — ${STREET_LABEL[match.street]} · Pot ${formatAmount(
       match.pot,
     )} · cap ${CAP}`,
   ];
@@ -99,13 +99,13 @@ function stateLines(match: MatchState, names: Map<number, string>): string[] {
       ? `all-in ${formatAmount(player.contribution)}`
       : `in ${formatAmount(player.contribution)}`;
     const hole = match.revealed && player.hole ? ` — ${cardsText(player.hole)}` : "";
-    lines.push(`${player.allIn ? "🚨" : "👤"} ${nameOf(names, player.userId)} — ${stack}${hole}`);
+    lines.push(`${nameOf(names, player.userId)} — ${stack}${hole}`);
   }
   const out = seated.filter((player) => player.folded);
   if (out.length > 0) {
     lines.push("", "Out");
     for (const player of out) {
-      lines.push(`✖ ${nameOf(names, player.userId)} — in ${formatAmount(player.contribution)}`);
+      lines.push(`${nameOf(names, player.userId)} — in ${formatAmount(player.contribution)}`);
     }
   }
   return lines;
@@ -113,10 +113,10 @@ function stateLines(match: MatchState, names: Map<number, string>): string[] {
 
 function nextLine(match: MatchState, names: Map<number, string>): string | null {
   if (match.status === "done") {
-    return "⏭ Hand over — result below";
+    return "Hand over — result below";
   }
   if (match.runout) {
-    return "⏭ Next: running out the board…";
+    return "Next: running out the board…";
   }
   if (match.actorUserId === null) {
     return null;
@@ -127,17 +127,17 @@ function nextLine(match: MatchState, names: Map<number, string>): string | null 
   }
   const call = Math.max(0, match.currentBet - actor.streetContribution);
   const action = call > 0 ? `call ${formatAmount(call)}` : "check";
-  return `⏭ Next: ${nameOf(names, actor.userId)} — ${action} · ${TURN_SECONDS}s to act`;
+  return `Next: ${nameOf(names, actor.userId)} — ${action} · ${TURN_SECONDS}s to act`;
 }
 
 export const enLabels: KeyboardLabels = {
   join: "Join",
   leave: "Leave",
-  takeover: "🙋 Take over",
-  deal: "🚀 Deal",
+  takeover: "Take over",
+  deal: "Deal",
   cancel: "Cancel",
-  openBot: "📬 Open bot",
-  cards: "🂠 Cards",
+  openBot: "Open bot",
+  cards: "Cards",
   fold: "Fold",
   check: "Check",
   call: (amount) => `Call ${amount}`,
@@ -146,15 +146,15 @@ export const enLabels: KeyboardLabels = {
   raiseTo: (to) => `Raise ${to}`,
   allIn: (to) => `All-in — ${to}`,
   showHand: "Show my hand",
-  rematch: "🔁 Rematch",
-  resetGroup: "⚠️ Reset this group",
+  rematch: "Rematch",
+  resetGroup: "Reset this group",
 };
 
 export const en: Messages = {
   labels: enLabels,
 
   pingText() {
-    return "🏓 pong (dev)";
+    return "pong (dev)";
   },
 
   unknownGroupText() {
@@ -163,7 +163,7 @@ export const en: Messages = {
 
   welcomeText() {
     return [
-      "🃏 <b>Welcome to Daily Poker!</b>",
+      "<b>Welcome to Daily Poker!</b>",
       "",
       "I run poker games in your group chat. Your cards and stats arrive here in DM.",
       "",
@@ -213,20 +213,20 @@ export const en: Messages = {
 
   lobbyText(view: LobbyView) {
     if (view.expired) {
-      return "⌛ <b>Lobby expired.</b>\nStart a new match with /newmatch.";
+      return "<b>Lobby expired.</b>\nStart a new match with /newmatch.";
     }
     const starter =
       view.starterId === null ? "— (tap Take over)" : nameOf(view.names, view.starterId);
     const joined = view.playerIds.map((id) => nameOf(view.names, id)).join(", ") || "—";
     const lines = [
-      "🃏 <b>Daily Poker — Lobby</b>",
+      "<b>Daily Poker — Lobby</b>",
       `Entry ${ANTE} each · max ${CAP} per hand · ${MIN_PLAYERS}–${MAX_PLAYERS} players`,
       "",
       `Can deal: ${starter}`,
       `Joined (${view.playerIds.length}): ${joined}`,
     ];
     if (view.error) {
-      lines.push("", `⚠️ ${escapeHtml(view.error)}`);
+      lines.push("", escapeHtml(view.error));
     } else if (view.playerIds.length < 2) {
       lines.push("", "Waiting for more players…");
     } else {
@@ -236,7 +236,7 @@ export const en: Messages = {
   },
 
   lobbyStartedText(handNo: number) {
-    return `✅ Hand #${handNo} started — updates below.`;
+    return `Hand #${handNo} started — updates below.`;
   },
 
   activityText(view: ActivityView) {
@@ -252,10 +252,10 @@ export const en: Messages = {
     const winnerNames = match.winners.map((id) => nameOf(names, id));
     let line: string;
     if (match.winners.length > 1) {
-      line = `🏆 <b>${winnerNames.join(", ")} split ${formatAmount(match.pot)}</b>`;
+      line = `<b>${winnerNames.join(", ")} split ${formatAmount(match.pot)}</b>`;
     } else {
       const delta = match.winners[0] === undefined ? 0 : (match.deltas[match.winners[0]] ?? 0);
-      line = `🏆 <b>${winnerNames[0] ?? "—"} wins ${formatAmount(match.pot)} (${
+      line = `<b>${winnerNames[0] ?? "—"} wins ${formatAmount(match.pot)} (${
         delta >= 0 ? "+" : ""
       }${formatAmount(delta)})</b>`;
     }
@@ -274,14 +274,14 @@ export const en: Messages = {
       lines.push(board);
     }
     for (const [userId, hole] of shown) {
-      lines.push(`👁 ${nameOf(names, userId)} shows ${cardsText(hole)}`);
+      lines.push(`${nameOf(names, userId)} shows ${cardsText(hole)}`);
     }
     return lines.join("\n");
   },
 
   dmCardsText(handNo: number, hole: [Card, Card]) {
     return [
-      `🂠 <b>Your hand — Hand #${handNo}</b>`,
+      `<b>Your hand — Hand #${handNo}</b>`,
       cardsText(hole),
       "",
       "Board and betting happen in the group.",
@@ -407,7 +407,7 @@ export const en: Messages = {
   resetGroupPromptText(groupTitle: string | null, chatId: number) {
     const group = groupTitle === null ? "this group" : `<b>${escapeHtml(groupTitle)}</b>`;
     return [
-      `⚠️ Reset ALL data for ${group} (${chatId})?`,
+      `Reset ALL data for ${group} (${chatId})?`,
       "",
       "This wipes every player, balance, stat and hand history. It cannot be undone.",
       "",
@@ -416,7 +416,7 @@ export const en: Messages = {
   },
 
   resetGroupArmedText() {
-    return "⚠️ Armed. Type RESET (all caps) to wipe the group now.";
+    return "Armed. Type RESET (all caps) to wipe the group now.";
   },
 
   resetGroupMismatchText() {
@@ -424,17 +424,15 @@ export const en: Messages = {
   },
 
   dailyClaimedText(balance: number) {
-    return `✅ +${DAILY_AMOUNT} chips claimed. Balance: ${formatAmount(
-      balance,
-    )}. Next claim in 24h.`;
+    return `+${DAILY_AMOUNT} chips claimed. Balance: ${formatAmount(balance)}. Next claim in 24h.`;
   },
 
   dailyTooEarlyText(remainingMs: number) {
-    return `⏳ Already claimed. Next claim in ${formatDurationEn(remainingMs)}.`;
+    return `Already claimed. Next claim in ${formatDurationEn(remainingMs)}.`;
   },
 
   dailyTeaserText(name: string) {
-    return `🎁 ${escapeHtml(name)} claimed their daily chips.`;
+    return `${escapeHtml(name)} claimed their daily chips.`;
   },
 
   dailyStatus(lastDailyAt: number | null, now: number, cooldownMs: number) {
@@ -447,9 +445,9 @@ export const en: Messages = {
   balanceText(view: BalanceView, cooldownMs: number) {
     const net = view.chipsWon - view.chipsLost;
     return [
-      `💰 Balance: ${formatAmount(view.balance)} ${CURRENCY_NAME}`,
-      `🌅 Daily: ${this.dailyStatus(view.lastDailyAt, view.now, cooldownMs)}`,
-      `📈 Record: ${view.handsPlayed} hands · ${view.handsWon} wins · ${
+      `Balance: ${formatAmount(view.balance)} ${CURRENCY_NAME}`,
+      `Daily: ${this.dailyStatus(view.lastDailyAt, view.now, cooldownMs)}`,
+      `Record: ${view.handsPlayed} hands · ${view.handsWon} wins · ${
         net >= 0 ? "+" : ""
       }${formatAmount(net)} ${CURRENCY_NAME}`,
     ].join("\n");
@@ -460,7 +458,7 @@ export const en: Messages = {
     const winRate =
       player.handsPlayed === 0 ? 0 : Math.round((player.handsWon / player.handsPlayed) * 100);
     const lines = [
-      `📊 <b>Your stats${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`,
+      `<b>Your stats${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`,
       `Hands: ${player.handsPlayed} · Wins: ${player.handsWon} (${winRate}%)`,
       `Net: ${net >= 0 ? "+" : ""}${formatAmount(net)} · Biggest pot: ${formatAmount(
         player.biggestPot,
@@ -474,13 +472,12 @@ export const en: Messages = {
 
   historyText(rows: HistoryView[]) {
     if (rows.length === 0) {
-      return "📜 No hands played yet.";
+      return "No hands played yet.";
     }
-    const lines = ["📜 <b>Last hands</b>"];
+    const lines = ["<b>Last hands</b>"];
     for (const row of rows) {
-      const marker = row.won ? "🏆" : "💔";
       const sign = row.delta >= 0 ? "+" : "−";
-      const parts = [`#${row.handNo}`, marker, `${sign}${formatAmount(Math.abs(row.delta))}`];
+      const parts = [`#${row.handNo}`, `${sign}${formatAmount(Math.abs(row.delta))}`];
       if (row.hole) {
         parts.push(cardsText(row.hole));
       }
@@ -493,7 +490,7 @@ export const en: Messages = {
   },
 
   leaderboardText(rows: LeaderboardRow[], groupTitle: string | null) {
-    const lines = [`🏆 <b>Leaderboard${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`];
+    const lines = [`<b>Leaderboard${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`];
     if (rows.length === 0) {
       lines.push("No chips claimed yet.");
       return lines.join("\n");
@@ -506,14 +503,14 @@ export const en: Messages = {
 
   versionText(version: string, webhookUrl: string | null, pending: number) {
     return [
-      `🤖 dailypoker.bot v${version}`,
+      `dailypoker.bot v${version}`,
       `Webhook: ${webhookUrl ?? "not set"}`,
       `Pending updates: ${pending}`,
     ].join("\n");
   },
 
   resetGroupDoneText(chatId: number) {
-    return `🧹 Group ${chatId} wiped.`;
+    return `Group ${chatId} wiped.`;
   },
 
   ownerOnlyText() {
@@ -521,6 +518,6 @@ export const en: Messages = {
   },
 
   languageSetText(lang: Lang) {
-    return lang === "fa" ? "✅ Language set to Persian / فارسی." : "✅ Language set to English.";
+    return lang === "fa" ? "Language set to Persian / فارسی." : "Language set to English.";
   },
 };

@@ -335,8 +335,8 @@ describe("play by play", () => {
     const text = texts[0] as string;
     expect(text).toContain("checks");
     expect(text).toContain("Still in");
-    expect(text).toContain("💰 Pot");
-    expect(text).toContain("⏭ Next:");
+    expect(text).toContain("· Pot");
+    expect(text).toContain("Next:");
     expect(text).toContain("60s to act");
     expect(calls.some((call) => call.method === "editMessageText")).toBe(false);
     expect(calls.some((call) => call.method === "sendMessage")).toBe(true);
@@ -354,7 +354,7 @@ describe("play by play", () => {
     }
     const done = await getTableState();
     const texts = groupTexts(calls);
-    const result = texts.find((text) => text.includes("🏆"));
+    const result = texts.find((text) => text.includes("wins") || text.includes("split"));
     expect(result).toBeDefined();
     const split = (done.match?.winners.length ?? 1) > 1;
     expect(result).toContain(split ? "split" : "wins");
@@ -371,7 +371,9 @@ describe("play by play", () => {
     await tap((await getTableState()).match?.actorUserId as number, "fold");
     const done = await getTableState();
     expect(done.match?.status).toBe("done");
-    const result = groupTexts(calls).find((text) => text.includes("🏆"));
+    const result = groupTexts(calls).find(
+      (text) => text.includes("wins") || text.includes("split"),
+    );
     expect(result).toBeDefined();
     expect(result).not.toMatch(/[♠♥♦♣]/);
   });
@@ -390,7 +392,7 @@ describe("full hands", () => {
     const snapshot = await getTableState();
     expect(snapshot.match?.status).toBe("done");
     const result = sentMessages(calls, GROUP_ID).find((call) =>
-      String(call.payload.text).includes("🏆"),
+      /wins|split/.test(String(call.payload.text)),
     );
     expect(result).toBeDefined();
     const b1 = await getBalance(P1);
@@ -400,7 +402,7 @@ describe("full hands", () => {
     expect([b1, b2].sort()).toEqual(split ? [200, 200] : [190, 210]);
   });
 
-  it("completes a nine-player all-in with a full runout and effects", async () => {
+  it("completes a nine-player all-in with a full runout", async () => {
     await seedPlayers(9);
     const calls = installMockTelegram();
     await postUpdate(messageUpdate(nextUpdateId(), GROUP_ID, P1, "/newmatch"));
@@ -431,15 +433,12 @@ describe("full hands", () => {
     }
     snapshot = await getTableState();
     expect(snapshot.match?.status).toBe("done");
-    expect(calls.some((call) => call.method === "sendDice" && call.payload.emoji === "🎲")).toBe(
-      true,
-    );
     const texts = groupTexts(calls);
-    expect(texts.some((text) => text.includes("🎲 Flop:"))).toBe(true);
-    expect(texts.some((text) => text.includes("🎲 Turn:"))).toBe(true);
-    expect(texts.some((text) => text.includes("🎲 River:"))).toBe(true);
+    expect(texts.some((text) => text.includes("Flop:"))).toBe(true);
+    expect(texts.some((text) => text.includes("Turn:"))).toBe(true);
+    expect(texts.some((text) => text.includes("River:"))).toBe(true);
     const result = sentMessages(calls, GROUP_ID).find((call) =>
-      String(call.payload.text).includes("🏆"),
+      /wins|split/.test(String(call.payload.text)),
     );
     expect(result).toBeDefined();
     let total = 0;

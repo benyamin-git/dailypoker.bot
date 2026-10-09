@@ -11,7 +11,6 @@ export interface Bindings {
   OWNER_USER_ID: string;
   BOT_USERNAME: string;
   WEBHOOK_PATH: string;
-  EFFECTS_ENABLED: string;
 }
 
 export interface AppConfig {
@@ -22,7 +21,6 @@ export interface AppConfig {
   webhookPath: string;
   allowedChatIds: number[];
   ownerUserId: number;
-  effectsEnabled: boolean;
 }
 
 const chatIdList = z
@@ -53,7 +51,6 @@ const configSchema = z.object({
   WEBHOOK_PATH: z.string().min(8),
   ALLOWED_CHAT_IDS: chatIdList,
   OWNER_USER_ID: z.coerce.number().int().nonnegative(),
-  EFFECTS_ENABLED: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
 
 export function parseConfig(env: Record<string, unknown>): AppConfig {
@@ -71,7 +68,6 @@ export function parseConfig(env: Record<string, unknown>): AppConfig {
     webhookPath: data.WEBHOOK_PATH,
     allowedChatIds: data.ALLOWED_CHAT_IDS,
     ownerUserId: data.OWNER_USER_ID,
-    effectsEnabled: data.EFFECTS_ENABLED,
   };
 }
 

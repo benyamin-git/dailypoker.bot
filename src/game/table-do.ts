@@ -87,7 +87,6 @@ interface TableState {
   resultMessageId: number | null;
   turnDeadlineAt: number | null;
   runoutDeadlineAt: number | null;
-  effectsSent: boolean;
   updatedAt: number;
 }
 
@@ -100,7 +99,6 @@ function emptyState(): TableState {
     resultMessageId: null,
     turnDeadlineAt: null,
     runoutDeadlineAt: null,
-    effectsSent: false,
     updatedAt: 0,
   };
 }
@@ -706,7 +704,6 @@ export class TableDO extends DurableObject<Bindings> {
     this.state.match = null;
     this.state.actionLog = [];
     this.state.resultMessageId = null;
-    this.state.effectsSent = false;
     this.state.turnDeadlineAt = null;
     this.state.runoutDeadlineAt = null;
     this.state.lobby = {
@@ -907,7 +904,6 @@ export class TableDO extends DurableObject<Bindings> {
 
     this.state.lobby = null;
     this.state.actionLog = [];
-    this.state.effectsSent = false;
     this.state.resultMessageId = null;
 
     for (const event of started.events) {
@@ -1078,14 +1074,6 @@ export class TableDO extends DurableObject<Bindings> {
       await this.finishHand(now);
       return true;
     }
-    if (state.runout && this.config.effectsEnabled && !this.state.effectsSent) {
-      this.state.effectsSent = true;
-      try {
-        await this.api.sendDice(this.groupId, "🎲");
-      } catch (error) {
-        console.error(JSON.stringify({ event: "effects_failed", error: safeErrorMessage(error) }));
-      }
-    }
     this.persist();
     if (activity !== null) {
       await this.postActivity(activity);
@@ -1231,13 +1219,6 @@ export class TableDO extends DurableObject<Bindings> {
     if (message) {
       this.state.resultMessageId = message.message_id;
       this.persist();
-    }
-    if (this.config.effectsEnabled && match.pot >= 200) {
-      try {
-        await this.api.sendDice(this.groupId, "🎰");
-      } catch (error) {
-        console.error(JSON.stringify({ event: "effects_failed", error: safeErrorMessage(error) }));
-      }
     }
     await this.api.flushEdits();
   }

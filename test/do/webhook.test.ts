@@ -67,7 +67,7 @@ describe("ping", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.method).toBe("sendMessage");
     expect(calls[0]?.payload.chat_id).toBe(GROUP_ID);
-    expect(calls[0]?.payload.text).toBe("🏓 pong (dev)");
+    expect(calls[0]?.payload.text).toBe("pong (dev)");
   });
 });
 

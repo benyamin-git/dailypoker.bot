@@ -9,7 +9,6 @@ export const TEST_BINDINGS = {
   OWNER_USER_ID: "424242",
   BOT_USERNAME: "dailypoker_test_bot",
   WEBHOOK_PATH: "test-webhook-path",
-  EFFECTS_ENABLED: "true",
 };
 
 export default defineConfig({
@@ -36,18 +35,6 @@ export default defineConfig({
         test: {
           name: "workers",
           include: ["test/do/**/*.test.ts"],
-        },
-      },
-      {
-        plugins: [
-          cloudflareTest({
-            wrangler: { configPath: "./wrangler.jsonc" },
-            miniflare: { bindings: { ...TEST_BINDINGS, EFFECTS_ENABLED: "false" } },
-          }),
-        ],
-        test: {
-          name: "workers-noeffects",
-          include: ["test/noeffects/**/*.test.ts"],
         },
       },
     ],

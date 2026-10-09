@@ -58,29 +58,29 @@ function headline(view: ActivityView): string {
     case "start": {
       const first = view.match.actorUserId;
       const name = first === null ? "—" : nameOf(names, first);
-      text = `🚀 دست #${view.match.handNo} — ${name} اول بازی میکند`;
+      text = `دست #${view.match.handNo} — ${name} اول بازی میکند`;
       break;
     }
     case "action": {
       const name = nameOf(names, activity.userId);
       switch (activity.kind) {
         case "fold":
-          text = `❌ ${name} فولد کرد`;
+          text = `${name} فولد کرد`;
           break;
         case "check":
-          text = `✅ ${name} چک کرد`;
+          text = `${name} چک کرد`;
           break;
         case "call":
-          text = `📞 ${name} کال کرد ${formatAmount(activity.to ?? 0)}`;
+          text = `${name} کال کرد ${formatAmount(activity.to ?? 0)}`;
           break;
         case "bet":
-          text = `🔥 ${name} شرط ${formatAmount(activity.to ?? 0)} بست`;
+          text = `${name} شرط ${formatAmount(activity.to ?? 0)} بست`;
           break;
         case "raise":
-          text = `🔥 ${name} تا ${formatAmount(activity.to ?? 0)} ریز کرد`;
+          text = `${name} تا ${formatAmount(activity.to ?? 0)} ریز کرد`;
           break;
         case "allin":
-          text = `🚨 ${name} آل-این شد — ${formatAmount(activity.to ?? 0)}`;
+          text = `${name} آل-این شد — ${formatAmount(activity.to ?? 0)}`;
           break;
       }
       break;
@@ -88,11 +88,11 @@ function headline(view: ActivityView): string {
     case "timeout": {
       const name = nameOf(names, activity.userId);
       const verb = activity.kind === "check" ? "چک کرد" : "فولد کرد";
-      text = `⏰ وقت ${name} تمام شد — ${verb}`;
+      text = `وقت ${name} تمام شد — ${verb}`;
       break;
     }
     case "street":
-      text = `🎲 ${STREET_LABEL[activity.street]}: ${cardsText(activity.cards)}`;
+      text = `${STREET_LABEL[activity.street]}: ${cardsText(activity.cards)}`;
       break;
   }
   return text;
@@ -100,7 +100,7 @@ function headline(view: ActivityView): string {
 
 function stateLines(match: MatchState, names: Map<number, string>): string[] {
   const lines = [
-    `🃏 دست #${match.handNo} — ${STREET_LABEL[match.street]} · 💰 پات ${formatAmount(
+    `دست #${match.handNo} — ${STREET_LABEL[match.street]} · پات ${formatAmount(
       match.pot,
     )} · سقف ${CAP}`,
   ];
@@ -120,13 +120,13 @@ function stateLines(match: MatchState, names: Map<number, string>): string[] {
       ? `آل-این ${formatAmount(player.contribution)}`
       : `در پات ${formatAmount(player.contribution)}`;
     const hole = match.revealed && player.hole ? ` — ${cardsText(player.hole)}` : "";
-    lines.push(`${player.allIn ? "🚨" : "👤"} ${nameOf(names, player.userId)} — ${stack}${hole}`);
+    lines.push(`${nameOf(names, player.userId)} — ${stack}${hole}`);
   }
   const out = seated.filter((player) => player.folded);
   if (out.length > 0) {
     lines.push("", "خارجشده");
     for (const player of out) {
-      lines.push(`✖ ${nameOf(names, player.userId)} — در پات ${formatAmount(player.contribution)}`);
+      lines.push(`${nameOf(names, player.userId)} — در پات ${formatAmount(player.contribution)}`);
     }
   }
   return lines;
@@ -134,10 +134,10 @@ function stateLines(match: MatchState, names: Map<number, string>): string[] {
 
 function nextLine(match: MatchState, names: Map<number, string>): string | null {
   if (match.status === "done") {
-    return "⏭ دست تمام شد — نتیجه پایین";
+    return "دست تمام شد — نتیجه پایین";
   }
   if (match.runout) {
-    return "⏭ در حال پخش کارتهای باقیمانده…";
+    return "در حال پخش کارتهای باقیمانده…";
   }
   if (match.actorUserId === null) {
     return null;
@@ -148,17 +148,17 @@ function nextLine(match: MatchState, names: Map<number, string>): string | null 
   }
   const call = Math.max(0, match.currentBet - actor.streetContribution);
   const action = call > 0 ? `کال ${formatAmount(call)}` : "چک";
-  return `⏭ نوبت: ${nameOf(names, actor.userId)} — ${action} · ${TURN_SECONDS} ثانیه`;
+  return `نوبت: ${nameOf(names, actor.userId)} — ${action} · ${TURN_SECONDS} ثانیه`;
 }
 
 export const faLabels: KeyboardLabels = {
   join: "ورود",
   leave: "خروج",
-  takeover: "🙋 شروعکننده شدن",
-  deal: "🚀 پخش",
+  takeover: "شروعکننده شدن",
+  deal: "پخش",
   cancel: "لغو",
-  openBot: "📬 باز کردن ربات",
-  cards: "🂠 کارتها",
+  openBot: "باز کردن ربات",
+  cards: "کارتها",
   fold: "فولد",
   check: "چک",
   call: (amount) => `کال ${amount}`,
@@ -167,15 +167,15 @@ export const faLabels: KeyboardLabels = {
   raiseTo: (to) => `ریز تا ${to}`,
   allIn: (to) => `آل-این — ${to}`,
   showHand: "نمایش دست من",
-  rematch: "🔁 بازی مجدد",
-  resetGroup: "⚠️ پاک کردن این گروه",
+  rematch: "بازی مجدد",
+  resetGroup: "پاک کردن این گروه",
 };
 
 export const fa: Messages = {
   labels: faLabels,
 
   pingText() {
-    return "🏓 پونگ (dev)";
+    return "پونگ (dev)";
   },
 
   unknownGroupText() {
@@ -184,7 +184,7 @@ export const fa: Messages = {
 
   welcomeText() {
     return [
-      "🃏 <b>به Daily Poker خوش آمدید!</b>",
+      "<b>به Daily Poker خوش آمدید!</b>",
       "",
       "من بازی پوکر را در گروه شما اجرا میکنم. کارتها و آمار شما در همین پیوی میآید.",
       "",
@@ -234,7 +234,7 @@ export const fa: Messages = {
 
   lobbyText(view: LobbyView) {
     if (view.expired) {
-      return "⌛ <b>اتاق انتظار منقضی شد.</b>\nبا /newmatch بازی جدید بسازید.";
+      return "<b>اتاق انتظار منقضی شد.</b>\nبا /newmatch بازی جدید بسازید.";
     }
     const starter =
       view.starterId === null
@@ -242,14 +242,14 @@ export const fa: Messages = {
         : nameOf(view.names, view.starterId);
     const joined = view.playerIds.map((id) => nameOf(view.names, id)).join("، ") || "—";
     const lines = [
-      "🃏 <b>Daily Poker — اتاق انتظار</b>",
+      "<b>Daily Poker — اتاق انتظار</b>",
       `ورودی ${ANTE} برای هر نفر · حداکثر ${CAP} در هر دست · ${MIN_PLAYERS} تا ${MAX_PLAYERS} بازیکن`,
       "",
       `شروعکننده: ${starter}`,
       `عضوها (${view.playerIds.length}): ${joined}`,
     ];
     if (view.error) {
-      lines.push("", `⚠️ ${escapeHtml(view.error)}`);
+      lines.push("", escapeHtml(view.error));
     } else if (view.playerIds.length < 2) {
       lines.push("", "در انتظار بازیکنان بیشتر…");
     } else {
@@ -259,7 +259,7 @@ export const fa: Messages = {
   },
 
   lobbyStartedText(handNo: number) {
-    return `✅ دست #${handNo} شروع شد — ادامه در پیامهای بعدی.`;
+    return `دست #${handNo} شروع شد — ادامه در پیامهای بعدی.`;
   },
 
   activityText(view: ActivityView) {
@@ -275,10 +275,10 @@ export const fa: Messages = {
     const winnerNames = match.winners.map((id) => nameOf(names, id));
     let line: string;
     if (match.winners.length > 1) {
-      line = `🏆 <b>${winnerNames.join("، ")} پات ${formatAmount(match.pot)} را تقسیم کردند</b>`;
+      line = `<b>${winnerNames.join("، ")} پات ${formatAmount(match.pot)} را تقسیم کردند</b>`;
     } else {
       const delta = match.winners[0] === undefined ? 0 : (match.deltas[match.winners[0]] ?? 0);
-      line = `🏆 <b>${winnerNames[0] ?? "—"} برنده ${formatAmount(match.pot)} شد (${
+      line = `<b>${winnerNames[0] ?? "—"} برنده ${formatAmount(match.pot)} شد (${
         delta >= 0 ? "+" : ""
       }${formatAmount(delta)})</b>`;
     }
@@ -297,14 +297,14 @@ export const fa: Messages = {
       lines.push(board);
     }
     for (const [userId, hole] of shown) {
-      lines.push(`👁 ${nameOf(names, userId)} نشان داد ${cardsText(hole)}`);
+      lines.push(`${nameOf(names, userId)} نشان داد ${cardsText(hole)}`);
     }
     return lines.join("\n");
   },
 
   dmCardsText(handNo: number, hole: [Card, Card]) {
     return [
-      `🂠 <b>دست شما — دست #${handNo}</b>`,
+      `<b>دست شما — دست #${handNo}</b>`,
       cardsText(hole),
       "",
       "برد و شرطبندی در گروه انجام میشود.",
@@ -430,7 +430,7 @@ export const fa: Messages = {
   resetGroupPromptText(groupTitle: string | null, chatId: number) {
     const group = groupTitle === null ? "این گروه" : `<b>${escapeHtml(groupTitle)}</b>`;
     return [
-      `⚠️ همهٔ دادههای ${group} (${chatId}) پاک شود؟`,
+      `همهٔ دادههای ${group} (${chatId}) پاک شود؟`,
       "",
       "بازیکنان، موجودیها، آمار و تاریخچه پاک میشوند و بازگشتپذیر نیست.",
       "",
@@ -439,7 +439,7 @@ export const fa: Messages = {
   },
 
   resetGroupArmedText() {
-    return "⚠️ تأیید فعال شد. برای پاک کردن همین حالا RESET را تایپ کنید.";
+    return "تأیید فعال شد. برای پاک کردن همین حالا RESET را تایپ کنید.";
   },
 
   resetGroupMismatchText() {
@@ -447,17 +447,17 @@ export const fa: Messages = {
   },
 
   dailyClaimedText(balance: number) {
-    return `✅ +${DAILY_AMOUNT} چیپ دریافت شد. موجودی: ${formatAmount(
+    return `+${DAILY_AMOUNT} چیپ دریافت شد. موجودی: ${formatAmount(
       balance,
     )}. دریافت بعدی در 24 ساعت.`;
   },
 
   dailyTooEarlyText(remainingMs: number) {
-    return `⏳ قبلاً دریافت کردهاید. دریافت بعدی در ${formatDurationFa(remainingMs)}.`;
+    return `قبلاً دریافت کردهاید. دریافت بعدی در ${formatDurationFa(remainingMs)}.`;
   },
 
   dailyTeaserText(name: string) {
-    return `🎁 ${escapeHtml(name)} چیپ روزانهاش را گرفت.`;
+    return `${escapeHtml(name)} چیپ روزانهاش را گرفت.`;
   },
 
   dailyStatus(lastDailyAt: number | null, now: number, cooldownMs: number) {
@@ -470,9 +470,9 @@ export const fa: Messages = {
   balanceText(view: BalanceView, cooldownMs: number) {
     const net = view.chipsWon - view.chipsLost;
     return [
-      `💰 موجودی: ${formatAmount(view.balance)} ${CURRENCY_NAME}`,
-      `🌅 روزانه: ${this.dailyStatus(view.lastDailyAt, view.now, cooldownMs)}`,
-      `📈 کارنامه: ${view.handsPlayed} دست · ${view.handsWon} برد · ${
+      `موجودی: ${formatAmount(view.balance)} ${CURRENCY_NAME}`,
+      `روزانه: ${this.dailyStatus(view.lastDailyAt, view.now, cooldownMs)}`,
+      `کارنامه: ${view.handsPlayed} دست · ${view.handsWon} برد · ${
         net >= 0 ? "+" : ""
       }${formatAmount(net)} ${CURRENCY_NAME}`,
     ].join("\n");
@@ -483,7 +483,7 @@ export const fa: Messages = {
     const winRate =
       player.handsPlayed === 0 ? 0 : Math.round((player.handsWon / player.handsPlayed) * 100);
     const lines = [
-      `📊 <b>آمار شما${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`,
+      `<b>آمار شما${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`,
       `دستها: ${player.handsPlayed} · بردها: ${player.handsWon} (${winRate}%)`,
       `خالص: ${net >= 0 ? "+" : ""}${formatAmount(net)} · بزرگترین پات: ${formatAmount(
         player.biggestPot,
@@ -497,13 +497,12 @@ export const fa: Messages = {
 
   historyText(rows: HistoryView[]) {
     if (rows.length === 0) {
-      return "📜 هنوز دستی بازی نشده.";
+      return "هنوز دستی بازی نشده.";
     }
-    const lines = ["📜 <b>آخرین دستها</b>"];
+    const lines = ["<b>آخرین دستها</b>"];
     for (const row of rows) {
-      const marker = row.won ? "🏆" : "💔";
       const sign = row.delta >= 0 ? "+" : "−";
-      const parts = [`#${row.handNo}`, marker, `${sign}${formatAmount(Math.abs(row.delta))}`];
+      const parts = [`#${row.handNo}`, `${sign}${formatAmount(Math.abs(row.delta))}`];
       if (row.hole) {
         parts.push(cardsText(row.hole));
       }
@@ -516,7 +515,7 @@ export const fa: Messages = {
   },
 
   leaderboardText(rows: LeaderboardRow[], groupTitle: string | null) {
-    const lines = [`🏆 <b>جدول امتیازات${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`];
+    const lines = [`<b>جدول امتیازات${groupTitle ? ` — ${escapeHtml(groupTitle)}` : ""}</b>`];
     if (rows.length === 0) {
       lines.push("هنوز کسی چیپی نگرفته.");
       return lines.join("\n");
@@ -529,14 +528,14 @@ export const fa: Messages = {
 
   versionText(version: string, webhookUrl: string | null, pending: number) {
     return [
-      `🤖 dailypoker.bot v${version}`,
+      `dailypoker.bot v${version}`,
       `وبهوک: ${webhookUrl ?? "تنظیم نشده"}`,
       `آپدیتهای در انتظار: ${pending}`,
     ].join("\n");
   },
 
   resetGroupDoneText(chatId: number) {
-    return `🧹 گروه ${chatId} پاک شد.`;
+    return `گروه ${chatId} پاک شد.`;
   },
 
   ownerOnlyText() {
@@ -544,8 +543,6 @@ export const fa: Messages = {
   },
 
   languageSetText(lang: Lang) {
-    return lang === "fa"
-      ? "✅ زبان ربات به فارسی تغییر کرد."
-      : "✅ زبان ربات به انگلیسی تغییر کرد.";
+    return lang === "fa" ? "زبان ربات به فارسی تغییر کرد." : "زبان ربات به انگلیسی تغییر کرد.";
   },
 };

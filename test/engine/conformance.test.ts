@@ -46,7 +46,6 @@ const CONFORMANCE: Record<string, string> = {
     "lands the shover and callers exactly at the cap and ends betting",
   "Short all-in, everyone folds": "lets a short shover take the pot when everyone folds",
   "Split pot remainder": "sends odd remainders to the earliest players in hand order",
-  "Effects flag off": "sends no dice messages when effects are disabled",
 };
 
 const PENDING_M3 = new Set<string>([]);
@@ -54,7 +53,7 @@ const PENDING_M3 = new Set<string>([]);
 describe("edge case conformance (03-game-rules §11)", () => {
   it("maps every edge case row to a named test", () => {
     const rows = Object.keys(CONFORMANCE);
-    expect(rows).toHaveLength(22);
+    expect(rows).toHaveLength(21);
     for (const row of rows) {
       expect(CONFORMANCE[row], row).toBeTruthy();
     }

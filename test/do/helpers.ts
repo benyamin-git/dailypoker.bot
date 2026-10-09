@@ -29,7 +29,7 @@ export function installMockTelegram(): TelegramCall[] {
     const payload = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     calls.push({ method, payload });
     let result: unknown = true;
-    if (method === "sendMessage" || method === "sendDice") {
+    if (method === "sendMessage") {
       result = { message_id: nextMessageId++, chat: { id: payload.chat_id } };
     }
     if (method === "getWebhookInfo") {

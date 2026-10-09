@@ -192,12 +192,4 @@ export class TelegramApi {
       reply_markup: replyMarkup,
     });
   }
-
-  async sendDice(chatId: number, emoji = "🎲"): Promise<TelegramMessage | null> {
-    this.sendsThisUpdate++;
-    if (this.sendsThisUpdate > this.sendCap) {
-      throw new SendCapExceededError();
-    }
-    return this.call<TelegramMessage>("sendDice", { chat_id: chatId, emoji });
-  }
 }

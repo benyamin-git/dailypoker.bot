@@ -60,7 +60,7 @@ describe("language mode", () => {
     await seedPlayer(P1, "Ali", 200, true);
     let calls = installMockTelegram();
     await groupMessage(P1, "/ping");
-    expect(texts(calls, GROUP_ID)[0]).toBe("🏓 pong (dev)");
+    expect(texts(calls, GROUP_ID)[0]).toBe("pong (dev)");
 
     calls = installMockTelegram();
     await groupMessage(P1, "/fa");
