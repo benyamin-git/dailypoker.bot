@@ -235,4 +235,4 @@ All game state lives in the Durable Object; the Worker is a thin router.
 
 ## License
 
-[DO WHATEVER YOU WANT LICENSE](LICENSE).
+[MIT](LICENSE).
