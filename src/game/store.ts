@@ -1,4 +1,5 @@
 import { HISTORY_LIMIT, PRUNE_UPDATES_AFTER_MS, PRUNE_UPDATES_THRESHOLD } from "../config";
+import type { Sql } from "../db";
 import type { Card, PlayerState } from "../engine/types";
 
 const MIGRATIONS: readonly (readonly string[])[] = [
@@ -57,7 +58,7 @@ const MIGRATIONS: readonly (readonly string[])[] = [
   ],
 ];
 
-export function runMigrations(sql: SqlStorage): void {
+export function runMigrations(sql: Sql): void {
   sql.exec(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
   const rows = sql.exec("SELECT value FROM meta WHERE key = 'schema_version'").toArray() as {
     value: string;
@@ -73,14 +74,14 @@ export function runMigrations(sql: SqlStorage): void {
   }
 }
 
-export function getMeta(sql: SqlStorage, key: string): string | null {
+export function getMeta(sql: Sql, key: string): string | null {
   const rows = sql.exec("SELECT value FROM meta WHERE key = ?", key).toArray() as {
     value: string;
   }[];
   return rows[0]?.value ?? null;
 }
 
-export function setMeta(sql: SqlStorage, key: string, value: string): void {
+export function setMeta(sql: Sql, key: string, value: string): void {
   sql.exec(
     `INSERT INTO meta (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -89,32 +90,32 @@ export function setMeta(sql: SqlStorage, key: string, value: string): void {
   );
 }
 
-export function deleteMeta(sql: SqlStorage, key: string): void {
+export function deleteMeta(sql: Sql, key: string): void {
   sql.exec("DELETE FROM meta WHERE key = ?", key);
 }
 
 export type GroupLang = "en" | "fa";
 
-export function getLang(sql: SqlStorage): GroupLang {
+export function getLang(sql: Sql): GroupLang {
   return getMeta(sql, "group_lang") === "fa" ? "fa" : "en";
 }
 
-export function setLang(sql: SqlStorage, lang: GroupLang): void {
+export function setLang(sql: Sql, lang: GroupLang): void {
   setMeta(sql, "group_lang", lang);
 }
 
-export function isUpdateProcessed(sql: SqlStorage, updateId: number): boolean {
+export function isUpdateProcessed(sql: Sql, updateId: number): boolean {
   const rows = sql
     .exec("SELECT 1 AS present FROM processed_updates WHERE update_id = ?", updateId)
     .toArray();
   return rows.length > 0;
 }
 
-export function markUpdateProcessed(sql: SqlStorage, updateId: number, now: number): void {
+export function markUpdateProcessed(sql: Sql, updateId: number, now: number): void {
   sql.exec("INSERT OR IGNORE INTO processed_updates (update_id, at) VALUES (?, ?)", updateId, now);
 }
 
-export function maybePruneUpdates(sql: SqlStorage, now: number): void {
+export function maybePruneUpdates(sql: Sql, now: number): void {
   const row = sql.exec("SELECT COUNT(*) AS count FROM processed_updates").one() as {
     count: number;
   };
@@ -139,7 +140,7 @@ export interface PlayerRow {
   created_at: number;
 }
 
-export function getPlayer(sql: SqlStorage, userId: number): PlayerRow | null {
+export function getPlayer(sql: Sql, userId: number): PlayerRow | null {
   const rows = sql
     .exec("SELECT * FROM players WHERE user_id = ?", userId)
     .toArray() as unknown as PlayerRow[];
@@ -147,7 +148,7 @@ export function getPlayer(sql: SqlStorage, userId: number): PlayerRow | null {
 }
 
 export function ensurePlayer(
-  sql: SqlStorage,
+  sql: Sql,
   user: { id: number; firstName: string; username: string | null },
   now: number,
 ): PlayerRow {
@@ -190,18 +191,18 @@ export function ensurePlayer(
   };
 }
 
-export function setDmStarted(sql: SqlStorage, userId: number): void {
+export function setDmStarted(sql: Sql, userId: number): void {
   sql.exec("UPDATE players SET dm_started = 1 WHERE user_id = ?", userId);
 }
 
-export function adjustBalance(sql: SqlStorage, userId: number, delta: number): void {
+export function adjustBalance(sql: Sql, userId: number, delta: number): void {
   if (delta === 0) {
     return;
   }
   sql.exec("UPDATE players SET balance = balance + ? WHERE user_id = ?", delta, userId);
 }
 
-export function createMatchRow(sql: SqlStorage, starterId: number, now: number): number {
+export function createMatchRow(sql: Sql, starterId: number, now: number): number {
   sql.exec(
     `INSERT INTO matches (hand_no, status, starter_id, created_at)
      VALUES (NULL, 'lobby', ?, ?)`,
@@ -212,7 +213,7 @@ export function createMatchRow(sql: SqlStorage, starterId: number, now: number):
   return row.id;
 }
 
-export function nextHandNo(sql: SqlStorage): number {
+export function nextHandNo(sql: Sql): number {
   const row = sql.exec("SELECT COALESCE(MAX(hand_no), 0) + 1 AS next FROM matches").one() as {
     next: number;
   };
@@ -220,7 +221,7 @@ export function nextHandNo(sql: SqlStorage): number {
 }
 
 export function setMatchStatus(
-  sql: SqlStorage,
+  sql: Sql,
   matchId: number,
   status: string,
   endedAt: number | null = null,
@@ -233,7 +234,7 @@ export function setMatchStatus(
 }
 
 export function setMatchStarted(
-  sql: SqlStorage,
+  sql: Sql,
   matchId: number,
   handNo: number,
   startedAt: number,
@@ -246,7 +247,7 @@ export function setMatchStarted(
   );
 }
 
-export function deleteMatch(sql: SqlStorage, matchId: number): void {
+export function deleteMatch(sql: Sql, matchId: number): void {
   sql.exec("DELETE FROM match_players WHERE match_id = ?", matchId);
   sql.exec("DELETE FROM matches WHERE id = ?", matchId);
 }
@@ -262,11 +263,7 @@ export interface MatchPlayerWrite {
   delta: number;
 }
 
-export function upsertMatchPlayers(
-  sql: SqlStorage,
-  matchId: number,
-  players: MatchPlayerWrite[],
-): void {
+export function upsertMatchPlayers(sql: Sql, matchId: number, players: MatchPlayerWrite[]): void {
   for (const player of players) {
     sql.exec(
       `INSERT INTO match_players
@@ -302,7 +299,7 @@ export interface FinishedMatch {
   log: unknown;
 }
 
-export function finishMatch(sql: SqlStorage, info: FinishedMatch): void {
+export function finishMatch(sql: Sql, info: FinishedMatch): void {
   sql.exec(
     `UPDATE matches
      SET status = 'done', ended_at = ?, pot = ?, board = ?, winner_ids = ?, log = ?
@@ -333,7 +330,7 @@ export function matchPlayerWrites(state: {
 }
 
 export function addHandStats(
-  sql: SqlStorage,
+  sql: Sql,
   userId: number,
   won: boolean,
   payout: number,
@@ -357,12 +354,7 @@ export function addHandStats(
   );
 }
 
-export function updateBestHand(
-  sql: SqlStorage,
-  userId: number,
-  handName: string,
-  category: number,
-): void {
+export function updateBestHand(sql: Sql, userId: number, handName: string, category: number): void {
   const player = getPlayer(sql, userId);
   if (!player) {
     return;
@@ -394,13 +386,13 @@ export function categoryFromName(name: string): number {
   return -1;
 }
 
-export function leaderboard(sql: SqlStorage, limit = 5): PlayerRow[] {
+export function leaderboard(sql: Sql, limit = 5): PlayerRow[] {
   return sql
     .exec("SELECT * FROM players ORDER BY balance DESC, user_id ASC LIMIT ?", limit)
     .toArray() as unknown as PlayerRow[];
 }
 
-export function pruneMatches(sql: SqlStorage, limit = HISTORY_LIMIT): void {
+export function pruneMatches(sql: Sql, limit = HISTORY_LIMIT): void {
   sql.exec(
     `DELETE FROM match_players WHERE match_id IN (
        SELECT id FROM matches ORDER BY id DESC LIMIT -1 OFFSET ?
@@ -415,7 +407,7 @@ export function pruneMatches(sql: SqlStorage, limit = HISTORY_LIMIT): void {
   );
 }
 
-export function lastFinishedMatchPlayers(sql: SqlStorage): number[] {
+export function lastFinishedMatchPlayers(sql: Sql): number[] {
   const match = sql
     .exec("SELECT id FROM matches WHERE status = 'done' ORDER BY id DESC LIMIT 1")
     .toArray() as { id: number }[];
@@ -439,7 +431,7 @@ export interface HistoryRow {
   pot: number | null;
 }
 
-export function playerHistory(sql: SqlStorage, userId: number, limit: number): HistoryRow[] {
+export function playerHistory(sql: Sql, userId: number, limit: number): HistoryRow[] {
   return sql
     .exec(
       `SELECT m.hand_no AS hand_no, m.board AS board, m.winner_ids AS winner_ids,
@@ -455,11 +447,11 @@ export function playerHistory(sql: SqlStorage, userId: number, limit: number): H
     .toArray() as unknown as HistoryRow[];
 }
 
-export function setDaily(sql: SqlStorage, userId: number, at: number): void {
+export function setDaily(sql: Sql, userId: number, at: number): void {
   sql.exec("UPDATE players SET last_daily_at = ? WHERE user_id = ?", at, userId);
 }
 
-export function wipeGroup(sql: SqlStorage): void {
+export function wipeGroup(sql: Sql): void {
   sql.exec("DELETE FROM match_players");
   sql.exec("DELETE FROM matches");
   sql.exec("DELETE FROM players");

@@ -6,30 +6,23 @@
   "type": "module",
   "packageManager": "bun@1.4.2",
   "scripts": {
-    "dev": "wrangler dev --env dev",
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "vitest run --project unit",
-    "test:workers": "vitest run --project workers",
-    "test:heavy": "TEST_HEAVY=1 vitest run --project unit test/engine/evaluator.oracle.test.ts",
+    "test:heavy": "TEST_HEAVY=1 vitest run test/engine/evaluator.oracle.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "format": "biome format --write .",
-    "deploy:dev": "wrangler deploy --env dev",
-    "deploy:prod": "wrangler deploy --env production",
-    "cf-typegen": "wrangler types"
+    "format": "biome format --write ."
   },
   "dependencies": {
-    "grammy": "1.46.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
-    "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "5.20260928.1",
+    "@types/node": "22.20.5",
     "pokersolver": "2.1.4",
     "typescript": "5.9.3",
-    "vitest": "4.1.11",
-    "wrangler": "4.143.0"
+    "vitest": "4.1.11"
   }
 }

@@ -3,8 +3,10 @@ node_modules/
 .dev.vars
 .env
 .env.*
+!.env.example
 dist/
 *.log
 coverage/
 .DS_Store
 .ai-state
+data/

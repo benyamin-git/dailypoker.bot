@@ -171,12 +171,6 @@ export function chatIdOf(update: ParsedUpdate): number | undefined {
   );
 }
 
-export function chatInfoOf(update: ParsedUpdate): { id: number; type: ChatType } | undefined {
-  const chat =
-    update.message?.chat ?? update.callback_query?.message?.chat ?? update.my_chat_member?.chat;
-  return chat === undefined ? undefined : { id: chat.id, type: chat.type };
-}
-
 export function classifyUpdate(update: ParsedUpdate): Intent {
   const message = update.message;
   if (message?.from && message.text !== undefined) {

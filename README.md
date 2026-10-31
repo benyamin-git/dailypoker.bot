@@ -5,15 +5,16 @@ hand is played at a time; each action is posted as a group message and each cont
 button. Hole cards and personal stats are sent by DM. Chips are play money: there are no payments
 and no chip transfers between players.
 
-It runs entirely on the Cloudflare Workers free plan, as one Worker plus a SQLite-backed Durable
-Object per Telegram group. There is no player-facing web UI and no home server to keep running.
+It runs as a single Bun process with a local SQLite database, connecting to Telegram's Bot API
+directly over long polling. There is no player-facing web UI, no public webhook, and no inbound
+port to open.
 
 > Single-tenant by design. A deployment serves one allowlisted Telegram group with its own bot
 > token. English is the default language; a group can switch to Persian with `/fa`.
 
 The group chat is the table: results, banter and the leaderboard stay in the group, while hidden
 information goes to DM. Keeping the game in the existing chat, at friend-group scale, is the
-point — it needs no server to stay up and no player has to leave Telegram.
+point — no player has to leave Telegram.
 
 ## What it looks like
 
@@ -95,17 +96,19 @@ Private chat (DM):
 | `/fa`, `/en` | switch the bot language |
 
 `/history` defaults to five hands and accepts up to 20. The language is a per-group setting
-persisted in the Durable Object; `/fa` or `/en` from the group or DM switches every group message,
-button and DM for that group's table.
+persisted in SQLite; `/fa` or `/en` from the group or DM switches every group message, button and
+DM for that group's table.
 
-Owner commands are DM-only: `/version` reports the bot version and webhook status, and
+Owner commands are DM-only: `/version` reports the bot version and polling status, and
 `/resetgroup` replies with a button, then requires typing `RESET` to wipe the group's players,
 balances and history.
 
 ## Self-hosting
 
-Requirements: [Bun](https://bun.sh), a Cloudflare account (free plan), and a bot token from
-[@BotFather](https://t.me/BotFather).
+Requirements: [Bun](https://bun.sh) 1.4+, a host that can reach `api.telegram.org`, and a bot token
+from [@BotFather](https://t.me/BotFather). If Telegram is blocked on your network, route the bot
+through a VPN or run it on a host outside the block; long polling needs a working outbound HTTPS
+path.
 
 ### 1. Create the bot
 
@@ -114,50 +117,39 @@ token. Disable privacy mode with `/setprivacy` → **Disable**, so the bot can r
 Optionally set the description and user picture. Add the bot to the group and open a DM with it,
 because hole cards are delivered there.
 
-### 2. Configure and deploy
+### 2. Configure and run
 
 ```bash
 bun install
-bunx wrangler login           # or export CLOUDFLARE_API_TOKEN
-
-bunx wrangler secret put BOT_TOKEN --env dev
-bunx wrangler secret put WEBHOOK_SECRET --env dev   # random 32+ bytes, e.g. openssl rand -hex 32
-bunx wrangler secret put ADMIN_KEY --env dev         # random, guards /admin/* routes
+cp .env.example .env    # then fill in the token and ids
+bun run start
 ```
 
-Secrets never live in the repo; local development reads them from `.dev.vars` (see
-`.dev.vars.example`, gitignored). For the same three secrets on a deployed Worker, use the
-`wrangler secret put` calls above per environment.
-
-All non-secret configuration is a plain var in the `env.<name>.vars` block of `wrangler.jsonc`
-— edit the values there before deploying, then simply deploy:
-
-```bash
-bun run deploy:dev    # wrangler deploy --env dev
-bun run deploy:prod   # wrangler deploy --env production
-```
-
+The process deletes any existing webhook, installs the command menus, then long-polls Telegram.
 Group ids are negative and start with `-100`; a helper bot such as `@userinfobot` reports both the
-group id and your user id. Both env blocks in `wrangler.jsonc` ship filled with the values for this
-deployment; replace them with your own before deploying.
+group id and your user id.
 
-### 3. Register the webhook
+State lives in a local SQLite file (`DB_PATH`, default `data/dailypoker.db`). Back it up by copying
+it while the bot is stopped. The bot needs no public URL and opens no inbound port.
 
-The Worker can register its own webhook, which is useful when `api.telegram.org` is unreachable
-from your machine. The calls also install the command menu. `WEBHOOK_PATH` is the value from your
-`wrangler.jsonc` env block (the command below assumes it is exported in the shell):
+Migrating from the old Cloudflare Worker: this version keeps its own SQLite state and does not read
+Durable Object storage. On startup it deletes the Telegram webhook, so the old Worker stops
+receiving updates; delete the old Workers in the Cloudflare dashboard when you no longer need them.
+
+To keep the bot running after logout or reboot, install the user service:
 
 ```bash
-curl -sS -X POST "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/register-webhook" \
-  -H "x-admin-key: $ADMIN_KEY"
-curl -sS -X POST "https://<worker-name>.<account>.workers.dev/tg/$WEBHOOK_PATH/admin/set-commands" \
-  -H "x-admin-key: $ADMIN_KEY"
+mkdir -p ~/.config/systemd/user
+cp deploy/dailypoker.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now dailypoker.service
 ```
 
-Check status with `/admin/webhook-info`, and remove the webhook with `/admin/delete-webhook`
-(POST). All admin routes use the same `x-admin-key` header.
+If the host does not keep a login session for your user, also run
+`loginctl enable-linger "$USER"`. Check the logs with
+`journalctl --user -u dailypoker.service -f`.
 
-### 4. Play
+### 3. Play
 
 1. Add the bot to the group. Chat ids must be in `ALLOWED_CHAT_IDS`; otherwise the bot replies
    once and stays silent.
@@ -167,69 +159,65 @@ Check status with `/admin/webhook-info`, and remove the webhook with `/admin/del
 
 ### Configuration
 
-Secrets are set per environment with `wrangler secret put` (or `.dev.vars` for `wrangler dev`);
-the four vars below live in the matching `env.<name>.vars` block of `wrangler.jsonc`.
+Configuration is read from the environment; `.env` (gitignored) is loaded by Bun automatically.
+See `.env.example` for a starting point.
 
-| Name | Kind | Purpose |
-|---|---|---|
-| `BOT_TOKEN` | secret | BotFather token |
-| `WEBHOOK_SECRET` | secret | `X-Telegram-Bot-Api-Secret-Token` value for the webhook (16+ chars) |
-| `ADMIN_KEY` | secret | guards the `/admin/*` routes (16+ chars) |
-| `ALLOWED_CHAT_IDS` | var | comma-separated group ids; exactly one is accepted |
-| `OWNER_USER_ID` | var | numeric Telegram id for owner commands |
-| `BOT_USERNAME` | var | used in `t.me/<bot>` deep links |
-| `WEBHOOK_PATH` | var | random path segment for the webhook (8+ chars) |
-
-A dev environment (`--env dev`) mirrors production with its own bot, allowlist and worker.
+| Name | Purpose |
+|---|---|
+| `BOT_TOKEN` | BotFather token |
+| `BOT_USERNAME` | used in `t.me/<bot>` deep links |
+| `ALLOWED_CHAT_IDS` | comma-separated group ids; exactly one is accepted |
+| `OWNER_USER_ID` | numeric Telegram id for owner commands |
+| `DB_PATH` | optional SQLite path (default `data/dailypoker.db`) |
 
 ## Development
 
 ```bash
 bun install
-bun run dev          # wrangler dev --env dev: local Worker and Durable Objects
-bun run test         # vitest: unit and workers projects
-bun run test:unit    # node-only unit tests
-bun run test:workers # Miniflare tests for the Worker and TableDO
+bun run start        # long-poll Telegram and run the table
+bun run dev          # same, restarting on file changes
+bun run test         # vitest: engine, Telegram and table tests
 bun run test:heavy   # TEST_HEAVY=1 oracle test against pokersolver
 bun run typecheck    # tsc --noEmit
 bun run lint         # biome check .
 bun run format       # biome format --write .
 ```
 
-Tests in `test/engine/`, `test/telegram/` and `test/util/` run in Node;
-`test/do/` boots the real Worker and TableDO in Miniflare with a mocked Telegram transport.
+Tests in `test/engine/`, `test/telegram/` and `test/table/` run in Node. `test/table/` boots the
+real `Table` against an in-memory SQLite database with a mocked Telegram transport.
 `test/types/` holds only the ambient `pokersolver` type declaration used by the oracle test.
 
 User-facing strings live in `src/telegram/messages/`, one catalogue per language (`en.ts`,
 `fa.ts`) behind a shared `Messages` interface. The engine in `src/engine/` imports nothing from
 the rest of the codebase; a purity test enforces that, so it can be audited standalone.
 
-Local secrets live in `.dev.vars` (gitignored; see `.dev.vars.example`).
+Local configuration and secrets live in `.env` (gitignored; see `.env.example`).
 
 ## Architecture
 
 ```
-Telegram ──webhook──▶ Worker (src/index.ts)
-                        │ verify secret header, dedupe update_id
-                        ▼
-               TableDO (one per group, src/game/table-do.ts)
-                 ├─ pure engine (src/engine/)
-                 ├─ SQLite: players, matches, stats (src/game/store.ts)
-                 ├─ turn alarm (60 s)
-                 └─ throttled Telegram sender (src/telegram/)
+Telegram ◀──getUpdates / Bot API──▶ bot process (src/index.ts)
+                                     │ validate update, dedupe update_id
+                                     ▼
+                            Table (src/game/table.ts)
+                              ├─ pure engine (src/engine/)
+                              ├─ SQLite: players, matches, stats (src/game/store.ts)
+                              ├─ 1 s deadline tick (turn, lobby, runout)
+                              └─ throttled Telegram sender (src/telegram/)
 ```
 
-All game state lives in the Durable Object; the Worker is a thin router.
+All game state lives in SQLite, and one process owns the table.
 
 ## Security notes
 
 - This is a play-money game: no payments, no chip transfers between players, no real-value
   settlement.
-- Secrets are never committed; `.dev.vars` is gitignored, and `wrangler.jsonc` holds only non-secret vars.
-- The webhook is protected by a secret header (constant-time compare) and a random path; the
-  admin routes use a separate constant-time key check.
+- Secrets are never committed; `.env` is gitignored and holds the bot token.
+- The bot makes outbound long-poll requests only: no public webhook, no admin HTTP routes and no
+  inbound port.
 - User-facing strings are HTML-escaped, and callbacks validate actor, match, turn and action
   server-side. Updates are deduplicated by `update_id`.
+- The SQLite file contains player names and balances; keep it readable only by the bot's user.
 - Hand history is pruned to the newest 1,000 matches per group. The owner can wipe all group data
   from DM with `/resetgroup`.
 

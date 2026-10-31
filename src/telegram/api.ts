@@ -88,6 +88,7 @@ interface PendingEdit {
 
 const MAX_RETRY_WAIT_MS = 30_000;
 const MAX_RATE_LIMIT_RETRIES = 2;
+const REQUEST_TIMEOUT_MS = 45_000;
 
 export class TelegramApi {
   private sendsThisUpdate = 0;
@@ -107,11 +108,19 @@ export class TelegramApi {
 
   async call<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
     for (let attempt = 0; ; attempt++) {
-      const response = await transport(`https://api.telegram.org/bot${this.token}/${method}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await transport(`https://api.telegram.org/bot${this.token}/${method}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       const data = (await response.json()) as TelegramResponse<T>;
       if (data.ok) {
         return data.result;

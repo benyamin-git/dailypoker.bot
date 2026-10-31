@@ -1,24 +1,8 @@
 import { z } from "zod";
 
-import type { TableDO } from "./game/table-do";
-
-export interface Bindings {
-  TABLE: DurableObjectNamespace<TableDO>;
-  BOT_TOKEN: string;
-  WEBHOOK_SECRET: string;
-  ADMIN_KEY: string;
-  ALLOWED_CHAT_IDS: string;
-  OWNER_USER_ID: string;
-  BOT_USERNAME: string;
-  WEBHOOK_PATH: string;
-}
-
 export interface AppConfig {
   botToken: string;
   botUsername: string;
-  webhookSecret: string;
-  adminKey: string;
-  webhookPath: string;
   allowedChatIds: number[];
   ownerUserId: number;
 }
@@ -46,9 +30,6 @@ const chatIdList = z
 const configSchema = z.object({
   BOT_TOKEN: z.string().min(1),
   BOT_USERNAME: z.string().min(1),
-  WEBHOOK_SECRET: z.string().min(16),
-  ADMIN_KEY: z.string().min(16),
-  WEBHOOK_PATH: z.string().min(8),
   ALLOWED_CHAT_IDS: chatIdList,
   OWNER_USER_ID: z.coerce.number().int().nonnegative(),
 });
@@ -63,29 +44,11 @@ export function parseConfig(env: Record<string, unknown>): AppConfig {
   return {
     botToken: data.BOT_TOKEN,
     botUsername: data.BOT_USERNAME,
-    webhookSecret: data.WEBHOOK_SECRET,
-    adminKey: data.ADMIN_KEY,
-    webhookPath: data.WEBHOOK_PATH,
     allowedChatIds: data.ALLOWED_CHAT_IDS,
     ownerUserId: data.OWNER_USER_ID,
   };
 }
 
-let cachedEnv: Record<string, unknown> | undefined;
-let cachedConfig: AppConfig | undefined;
-
-export function getConfig(env: Record<string, unknown>): AppConfig {
-  if (cachedEnv === env && cachedConfig) {
-    return cachedConfig;
-  }
-  const config = parseConfig(env);
-  cachedEnv = env;
-  cachedConfig = config;
-  return config;
-}
-
-declare global {
-  namespace Cloudflare {
-    interface Env extends Bindings {}
-  }
+export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
+  return parseConfig(env);
 }

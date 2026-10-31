@@ -133,7 +133,7 @@ export interface Messages {
   statsText(player: StatsView, groupTitle: string | null): string;
   historyText(rows: HistoryView[]): string;
   leaderboardText(rows: LeaderboardRow[], groupTitle: string | null): string;
-  versionText(version: string, webhookUrl: string | null, pending: number): string;
+  versionText(version: string, pending: number): string;
   resetGroupDoneText(chatId: number): string;
   ownerOnlyText(): string;
 

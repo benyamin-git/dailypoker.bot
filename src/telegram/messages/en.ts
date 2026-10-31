@@ -501,12 +501,10 @@ export const en: Messages = {
     return lines.join("\n");
   },
 
-  versionText(version: string, webhookUrl: string | null, pending: number) {
-    return [
-      `dailypoker.bot v${version}`,
-      `Webhook: ${webhookUrl ?? "not set"}`,
-      `Pending updates: ${pending}`,
-    ].join("\n");
+  versionText(version: string, pending: number) {
+    return [`dailypoker.bot v${version}`, "Mode: long polling", `Pending updates: ${pending}`].join(
+      "\n",
+    );
   },
 
   resetGroupDoneText(chatId: number) {

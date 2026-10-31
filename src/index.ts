@@ -1,133 +1,78 @@
-import type { AppConfig, Bindings } from "./env";
-import { getConfig } from "./env";
-import { TelegramApi } from "./telegram/api";
-import { chatInfoOf, updateSchema } from "./telegram/bot";
+import { openDatabase } from "./db";
+import { loadConfig } from "./env";
+import * as store from "./game/store";
+import { Table } from "./game/table";
+import { ALLOWED_UPDATES, pollOnce } from "./polling";
+import { TelegramApi, TelegramError } from "./telegram/api";
 import { GROUP_COMMANDS, PRIVATE_COMMANDS } from "./telegram/commands";
-import { constantTimeEqual } from "./util/crypto";
 import { safeErrorMessage } from "./util/log";
+import { sleep } from "./util/time";
 
-export { TableDO } from "./game/table-do";
+const config = loadConfig();
+const db = openDatabase(process.env.DB_PATH ?? "data/dailypoker.db");
+const api = new TelegramApi(config.botToken);
+const table = new Table(config, db);
 
-function jsonResponse(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
+let queue: Promise<void> = Promise.resolve();
+function serial(task: () => Promise<void>): Promise<void> {
+  queue = queue.then(task, task);
+  return queue;
 }
 
-async function handleWebhook(
-  request: Request,
-  env: Bindings,
-  config: AppConfig,
-): Promise<Response> {
-  if (request.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
-  const secretHeader = request.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
-  if (!constantTimeEqual(secretHeader, config.webhookSecret)) {
-    return new Response("Forbidden", { status: 403 });
-  }
-  const raw = await request.text();
-  let json: unknown;
+async function configure(): Promise<void> {
+  const firstPoll = store.getMeta(db, "polling_initialized") !== "1";
+  await api.call("deleteWebhook", { drop_pending_updates: firstPoll });
+  store.setMeta(db, "polling_initialized", "1");
   try {
-    json = JSON.parse(raw);
-  } catch {
-    return new Response("ok");
-  }
-  const parsed = updateSchema.safeParse(json);
-  if (!parsed.success) {
-    return new Response("ok");
-  }
-  const chat = chatInfoOf(parsed.data);
-  if (chat === undefined) {
-    return new Response("ok");
-  }
-  const targetId = chat.type === "private" ? config.allowedChatIds[0] : chat.id;
-  const stub = env.TABLE.get(env.TABLE.idFromName(String(targetId)));
-  const response = await stub.fetch("https://table.internal/update", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: raw,
-  });
-  return new Response(response.body, { status: response.status });
-}
-
-async function handleAdmin(
-  operation: string,
-  request: Request,
-  config: AppConfig,
-  origin: string,
-): Promise<Response> {
-  const api = new TelegramApi(config.botToken);
-  switch (operation) {
-    case "register-webhook": {
-      if (request.method !== "POST") {
-        return new Response("Method Not Allowed", { status: 405 });
-      }
-      const result = await api.call("setWebhook", {
-        url: `${origin}/tg/${config.webhookPath}`,
-        secret_token: config.webhookSecret,
-        allowed_updates: ["message", "callback_query", "my_chat_member"],
-        drop_pending_updates: true,
-      });
-      return jsonResponse(result);
-    }
-    case "webhook-info": {
-      if (request.method !== "GET" && request.method !== "POST") {
-        return new Response("Method Not Allowed", { status: 405 });
-      }
-      const result = await api.call("getWebhookInfo", {});
-      return jsonResponse(result);
-    }
-    case "delete-webhook": {
-      if (request.method !== "POST") {
-        return new Response("Method Not Allowed", { status: 405 });
-      }
-      const result = await api.call("deleteWebhook", { drop_pending_updates: false });
-      return jsonResponse(result);
-    }
-    case "set-commands": {
-      if (request.method !== "POST") {
-        return new Response("Method Not Allowed", { status: 405 });
-      }
-      const group = await api.call("setMyCommands", {
-        commands: GROUP_COMMANDS,
-        scope: { type: "all_group_chats" },
-      });
-      const priv = await api.call("setMyCommands", {
-        commands: PRIVATE_COMMANDS,
-        scope: { type: "all_private_chats" },
-      });
-      return jsonResponse({ group, private: priv });
-    }
-    default:
-      return new Response("Not Found", { status: 404 });
+    await api.call("setMyCommands", {
+      commands: GROUP_COMMANDS,
+      scope: { type: "all_group_chats" },
+    });
+    await api.call("setMyCommands", {
+      commands: PRIVATE_COMMANDS,
+      scope: { type: "all_private_chats" },
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: "commands_failed", error: safeErrorMessage(error) }));
   }
 }
 
-export default {
-  async fetch(request: Request, env: Bindings): Promise<Response> {
-    let config: AppConfig;
+async function main(): Promise<void> {
+  await configure();
+  console.log(JSON.stringify({ event: "polling_started", bot: config.botUsername }));
+
+  setInterval(() => void serial(() => table.tick()), 1000);
+  let offset = 0;
+  let retryMs = 1000;
+  for (;;) {
     try {
-      config = getConfig(env as unknown as Record<string, unknown>);
+      offset = await pollOnce(
+        (next) =>
+          api.call<unknown[]>("getUpdates", {
+            offset: next,
+            timeout: 30,
+            allowed_updates: ALLOWED_UPDATES,
+          }),
+        (update) => serial(() => table.handleUpdate(update)),
+        offset,
+      );
+      retryMs = 1000;
     } catch (error) {
-      console.error(JSON.stringify({ event: "env_invalid", error: safeErrorMessage(error) }));
-      return new Response("misconfigured", { status: 500 });
-    }
-
-    const url = new URL(request.url);
-    const prefix = `/tg/${config.webhookPath}`;
-    if (url.pathname === prefix) {
-      return handleWebhook(request, env, config);
-    }
-    const adminPrefix = `${prefix}/admin/`;
-    if (url.pathname.startsWith(adminPrefix)) {
-      const adminKey = request.headers.get("x-admin-key") ?? "";
-      if (!constantTimeEqual(adminKey, config.adminKey)) {
-        return new Response("Forbidden", { status: 403 });
+      if (error instanceof TelegramError && error.errorCode === 409) {
+        try {
+          await api.call("deleteWebhook", { drop_pending_updates: true });
+        } catch {
+          // the next getUpdates retry reports anything still broken
+        }
       }
-      return handleAdmin(url.pathname.slice(adminPrefix.length), request, config, url.origin);
+      console.error(JSON.stringify({ event: "poll_error", error: safeErrorMessage(error) }));
+      await sleep(retryMs);
+      retryMs = Math.min(retryMs * 2, 30_000);
     }
-    return new Response("Not Found", { status: 404 });
-  },
-} satisfies ExportedHandler<Bindings>;
+  }
+}
+
+main().catch((error) => {
+  console.error(JSON.stringify({ event: "fatal", error: safeErrorMessage(error) }));
+  process.exit(1);
+});

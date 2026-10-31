@@ -286,7 +286,7 @@ describe("owner commands", () => {
     await dm(OWNER, "/version");
     const version = texts(calls, OWNER)[0] as string;
     expect(version).toContain("dailypoker.bot v0.1.0");
-    expect(version).toContain("example.com");
+    expect(version).toContain("long polling");
   });
 
   it("wipes group storage only after the owner arms reset and types RESET", async () => {

@@ -1,5 +1,3 @@
-import { DurableObject } from "cloudflare:workers";
-
 import {
   ANTE,
   DAILY_AMOUNT,
@@ -12,6 +10,7 @@ import {
   RUNOUT_STEP_MS,
   TURN_SECONDS,
 } from "../config";
+import type { Sql } from "../db";
 import { evaluate7 } from "../engine/evaluator";
 import {
   advanceRunout,
@@ -26,16 +25,15 @@ import {
   timeoutAction,
 } from "../engine/hand";
 import type { Action, Card, EngineResult, MatchState, PlayerState, Street } from "../engine/types";
-import type { AppConfig, Bindings } from "../env";
-import { getConfig } from "../env";
+import type { AppConfig } from "../env";
 import { TelegramApi } from "../telegram/api";
 import {
   chatIdOf,
   classifyUpdate,
   type Intent,
+  type ParsedUpdate,
   parseCallbackData,
   type TelegramUser,
-  updateSchema,
 } from "../telegram/bot";
 import {
   lobbyKeyboard,
@@ -126,23 +124,20 @@ interface ActionContext {
   turnId?: number;
 }
 
-export class TableDO extends DurableObject<Bindings> {
-  private readonly sql: SqlStorage;
+export class Table {
+  private readonly sql: Sql;
   private readonly config: AppConfig;
   private readonly api: TelegramApi;
   private state: TableState = emptyState();
   private lang: Lang = "en";
 
-  constructor(ctx: DurableObjectState, env: Bindings) {
-    super(ctx, env);
-    this.sql = ctx.storage.sql;
-    this.config = getConfig(env as unknown as Record<string, unknown>);
+  constructor(config: AppConfig, sql: Sql) {
+    this.config = config;
+    this.sql = sql;
     this.api = new TelegramApi(this.config.botToken);
-    ctx.blockConcurrencyWhile(async () => {
-      store.runMigrations(this.sql);
-      this.state = this.loadState();
-      this.lang = store.getLang(this.sql);
-    });
+    store.runMigrations(this.sql);
+    this.state = this.loadState();
+    this.lang = store.getLang(this.sql);
   }
 
   private get msg(): Messages {
@@ -174,22 +169,10 @@ export class TableDO extends DurableObject<Bindings> {
     store.setMeta(this.sql, STATE_KEY, JSON.stringify(this.state));
   }
 
-  override async fetch(request: Request): Promise<Response> {
-    const raw = await request.text();
-    let json: unknown;
-    try {
-      json = JSON.parse(raw);
-    } catch {
-      return new Response("ok");
-    }
-    const parsed = updateSchema.safeParse(json);
-    if (!parsed.success) {
-      return new Response("ok");
-    }
-    const update = parsed.data;
+  async handleUpdate(update: ParsedUpdate): Promise<void> {
     const now = Date.now();
     if (store.isUpdateProcessed(this.sql, update.update_id)) {
-      return new Response("ok");
+      return;
     }
     store.markUpdateProcessed(this.sql, update.update_id, now);
     store.maybePruneUpdates(this.sql, now);
@@ -198,7 +181,6 @@ export class TableDO extends DurableObject<Bindings> {
     try {
       await this.handleIntent(classifyUpdate(update));
       await this.api.flushEdits();
-      await this.scheduleAlarm();
     } catch (error) {
       console.error(
         JSON.stringify({
@@ -208,12 +190,11 @@ export class TableDO extends DurableObject<Bindings> {
           error: safeErrorMessage(error),
         }),
       );
-      return new Response("error", { status: 500 });
+      throw error;
     }
-    return new Response("ok");
   }
 
-  override async alarm(): Promise<void> {
+  async tick(): Promise<void> {
     const now = Date.now();
     this.api.resetPerUpdate();
     try {
@@ -236,28 +217,8 @@ export class TableDO extends DurableObject<Bindings> {
       }
       await this.api.flushEdits();
     } catch (error) {
-      console.error(JSON.stringify({ event: "alarm_error", error: safeErrorMessage(error) }));
+      console.error(JSON.stringify({ event: "tick_error", error: safeErrorMessage(error) }));
     }
-    this.persist();
-    await this.scheduleAlarm();
-  }
-
-  private async scheduleAlarm(): Promise<void> {
-    const times: number[] = [];
-    if (this.state.turnDeadlineAt !== null) {
-      times.push(this.state.turnDeadlineAt);
-    }
-    if (this.state.runoutDeadlineAt !== null) {
-      times.push(this.state.runoutDeadlineAt);
-    }
-    if (this.state.lobby !== null) {
-      times.push(this.state.lobby.deadlineAt);
-    }
-    if (times.length === 0) {
-      await this.ctx.storage.deleteAlarm();
-      return;
-    }
-    await this.ctx.storage.setAlarm(Math.min(...times));
   }
 
   private async handleIntent(intent: Intent): Promise<void> {
@@ -1146,6 +1107,7 @@ export class TableDO extends DurableObject<Bindings> {
     const match = this.state.match;
     if (match?.status !== "active" || match.actorUserId === null) {
       this.state.turnDeadlineAt = null;
+      this.persist();
       return;
     }
     const actor = match.players.find(
@@ -1171,6 +1133,7 @@ export class TableDO extends DurableObject<Bindings> {
     const match = this.state.match;
     if (match?.status !== "active" || !match.runout) {
       this.state.runoutDeadlineAt = null;
+      this.persist();
       return;
     }
     const result = advanceRunout(match);
@@ -1396,13 +1359,10 @@ export class TableDO extends DurableObject<Bindings> {
       await this.privateAlert(intent.userId, this.msg.ownerOnlyText());
       return;
     }
-    const info = await this.api.call<{ url?: string; pending_update_count?: number }>(
-      "getWebhookInfo",
-      {},
-    );
+    const info = await this.api.call<{ pending_update_count?: number }>("getWebhookInfo", {});
     await this.api.sendMessage(
       intent.chatId,
-      this.msg.versionText("0.1.0", info.url ?? null, info.pending_update_count ?? 0),
+      this.msg.versionText("0.1.0", info.pending_update_count ?? 0),
     );
   }
 

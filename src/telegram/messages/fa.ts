@@ -526,11 +526,11 @@ export const fa: Messages = {
     return lines.join("\n");
   },
 
-  versionText(version: string, webhookUrl: string | null, pending: number) {
+  versionText(version: string, pending: number) {
     return [
       `dailypoker.bot v${version}`,
-      `وبهوک: ${webhookUrl ?? "تنظیم نشده"}`,
-      `آپدیتهای در انتظار: ${pending}`,
+      "حالت: دریافت مستقیم (long polling)",
+      `آپدیت‌های در انتظار: ${pending}`,
     ].join("\n");
   },
 

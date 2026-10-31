@@ -1,4 +1,3 @@
-import { evictAllDurableObjects } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resetTelegramTransport, setDefaultMinEditInterval } from "../../src/telegram/api";
@@ -12,6 +11,7 @@ import {
   lastGroupText,
   messageUpdate,
   postUpdate,
+  restartTable,
   seedPlayer,
   sentMessages,
   type TelegramCall,
@@ -138,11 +138,11 @@ describe("language mode", () => {
     expect(answerTexts(staleCalls)).toContain("این حرکت دیگر در دسترس نیست");
   });
 
-  it("keeps the chosen language across durable object eviction", async () => {
+  it("keeps the chosen language across a restart", async () => {
     await seedPlayer(P1, "Ali", 200, true);
     const switched = await groupMessage(P1, "/fa");
     await switched.text();
-    await evictAllDurableObjects();
+    await restartTable();
 
     const calls = installMockTelegram();
     await dm(P1, "/balance");
