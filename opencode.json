@@ -1,7 +1,4 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "skills": [
-    "~/dev/opencode-skills/scopes/cloudflare",
-    "~/dev/opencode-skills/scopes/js"
-  ]
+  "skills": ["~/dev/benyamin-git-skills/scopes/cloudflare", "~/dev/benyamin-git-skills/scopes/js"]
 }
