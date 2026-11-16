@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.env.*
+.dev.vars
+.ai-state
+node_modules
+data
+test
+coverage
+*.log
+.wrangler

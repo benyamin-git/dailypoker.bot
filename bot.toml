@@ -1,0 +1,3 @@
+name = "Daily Poker Bot"
+env_file = ".env"
+volumes = ["data:/data"]
